@@ -1,0 +1,23 @@
+要增加的功能：
+
+
+乐谱滚动
+
+
+<div class="sheet-display">
+        <div class="note-list">
+          <div 
+            v-for="(note, index) in currentSheet.notes" 
+            :key="index"
+            class="note-item"
+            :class="{ 
+              'current': currentNoteIndex === index,
+              'completed': index < currentNoteIndex
+            }"
+          >
+            <div class="note-name">{{ note.noteName }}</div>
+            <div class="character">{{ formatDuration(note.duration) }}</div>
+            <div class="duration">{{note.duration}}</div>
+          </div>
+        </div>
+      </div>
