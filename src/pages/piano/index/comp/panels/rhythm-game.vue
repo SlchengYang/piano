@@ -33,7 +33,7 @@
           <button class="btn-select" @click="selectSheet">选择乐谱</button>
           <button class="btn-reset" @click="resetPractice">重新开始</button>
           <button class="btn-start" @click="startGame" v-if="currentSheet.title">开始游戏</button>
-          <button class="btn-history" @click="showHistory = !showHistory" v-if="currentSheet.title">历史记录</button>
+          <button class="btn-history" @click="toggleHistory" v-if="currentSheet.title">历史记录</button>
         </div>
       </div>
   
@@ -54,6 +54,37 @@
         </div>
       </div>
      
+
+      <!-- 评分反馈弹窗 -->
+      <!-- <div class="score-feedback" v-if="isScoreFeedbackVisible">
+        <div class="feedback-header">
+          <h3 v-if="practiceCompleted">练习完成反馈</h3>
+          <h3 v-else>很遗憾</h3>
+          <span class="close-btn" @click="isScoreFeedbackVisible = false">×</span>
+        </div>
+        <div class="feedback-content">
+          <div class="score-overview">
+            <h4 v-if="practiceCompleted">综合评分: <span class="score-number">{{ finalScore.totalScore }}</span>/100</h4>
+            <h4 v-else>练习未完成</h4>
+          </div>
+          <div class="score-details" v-if="practiceCompleted">
+            <p>准确性: {{ finalScore.accuracy }}%</p>
+            <p>连贯性: {{ finalScore.maxConsecutiveCorrect }}个连续正确</p>
+            <p>节奏准确性: {{ finalScore.rhythmAccuracy }}%</p>
+          </div>
+          <div class="error-details" v-if="!practiceCompleted && errorDetails.length > 0">
+            <h4>错误详情:</h4>
+            <ul>
+              <li v-for="(error, index) in errorDetails" :key="index">
+                {{ error }}
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="feedback-footer">
+          <button class="btn-close" @click="isScoreFeedbackVisible = false">关闭</button>
+        </div>
+      </div> -->
       <!-- 评分反馈弹窗 -->
       <div class="score-feedback" v-if="isScoreFeedbackVisible">
         <div class="feedback-header">
@@ -74,28 +105,54 @@
           <button class="btn-close" @click="isScoreFeedbackVisible = false">关闭</button>
         </div>
       </div>
-      
+
+
       <!-- 添加提示信息 -->
       <div class="start-message" v-if="startMessageVisible">
         游戏已开始！请按照乐谱顺序弹奏钢琴键。
       </div>
 
       <!-- 历史记录弹窗 -->
-    <div class="history-feedback" v-if="showHistory">
-      <div class="feedback-header">
-        <h3>历史得分记录</h3>
-        <span class="close-btn" @click="showHistory = false">×</span>
-      </div>
-      <div class="history-content">
-        <div class="history-list">
-          <div class="history-item" v-for="(record, index) in historyRecords" :key="index">
-            <div class="history-song">{{ record.songName }}</div>
-            <div class="history-score">{{ record.score }}</div>
-            <div class="history-time">{{ record.time }}</div>
+      <div class="history-feedback" v-if="showHistory">
+        <div class="feedback-header">
+          <h3>历史得分记录</h3>
+          <span class="close-btn" @click="showHistory = false">×</span>
+        </div>
+        <div class="history-content">
+          <div class="history-filters">
+            <button class="filter-btn" @click="sortHistory('time')">按时间排序</button>
+            <button class="filter-btn" @click="sortHistory('score')">按分数排序</button>
+          </div>
+          <div class="batch-delete">
+            <button class="batch-delete-btn" @click="toggleBatchDelete">{{ batchDelete ? '取消多选' : '多选删除' }}</button>
+          </div>
+          <div class="history-list">
+            <div class="history-item" v-for="(record, index) in filteredHistory" :key="index">
+              <div class="history-song">{{ record.songName }}</div>
+              <div class="history-score">{{ record.score }}</div>
+               <div class="history-time">{{ formatTime(record.time) }}</div>
+              <div class="history-status">{{ record.completed ? '已完成' : `未完成 (${record.errorReason === 'timeout' ? '超时' : '按错键'})` }}</div>
+              <input type="checkbox" v-model="selectedRecords" :value="index" v-if="batchDelete">
+              <button class="delete-btn" @click.stop="deleteHistory(index)" v-else>删除</button>
+            </div>
+          </div>
+          <div class="delete-all-container" v-if="!batchDelete">
+            <button class="delete-all-btn" @click="deleteAllHistory">删除全部历史记录</button>
+          </div>
+          <div class="delete-selected-container" v-else>
+            <button class="delete-selected-btn" @click="deleteSelectedHistory">删除选中历史记录</button>
           </div>
         </div>
       </div>
-    </div>
+
+      <!-- 开始提示弹窗 -->
+      <div class="start-prompt" v-if="showStartPrompt">
+        <div class="prompt-content">
+          <h3>提示</h3>
+          <p>请点击“开始游戏”按钮开始练习。</p>
+          <button class="btn-close" @click="closeStartPrompt">确定</button>
+        </div>
+      </div>
 
     </div>
   </template>
@@ -230,12 +287,16 @@
         },
 
 
+        
+        // 评分反馈相关数据
+
         isScoreFeedbackVisible: false,
         // finalScore需要在这里声明
         finalScore: null,
-
         pianoKeyToKeyboardKey: {}, // 钢琴键到键盘按键的映射
         userPerformance: [], // 存储用户的按键表现记录
+        practiceCompleted: false, // 是否完成练习
+        errorDetails: [], // 错误详情
 
 
         // ...其他数据属性
@@ -245,8 +306,16 @@
 
         gameStarted: false, // 游戏是否已开始
         startMessageVisible: false, // 是否显示“游戏已开始”提示
+        timedOut: false, // 是否超时未按下键盘
+
+        // 历史记录相关数据
         showHistory: false, // 是否显示历史记录弹窗
         historyRecords: [], // 历史记录
+        filteredHistory: [], // 过滤和排序后的历史记录
+        historySort: 'time', // 历史记录排序方式
+        batchDelete: false, // 是否处于批量删除模式
+        selectedRecords: [], // 选中的历史记录索引
+        showStartPrompt: false, // 是否显示开始提示弹窗
       };
     },
     
@@ -267,9 +336,10 @@
       this.calculateVisibleNoteCount();
 
 
-      
-      // 监听窗口大小变化
-      window.addEventListener('resize', this.calculateVisibleNoteCount);
+        // 启动计时器
+        // this.startInactivityTimer();
+        // 监听窗口大小变化
+        window.addEventListener('resize', this.calculateVisibleNoteCount);
     },
     
     beforeDestroy() {
@@ -334,36 +404,41 @@
         });
       },
       
-      // 处理用户按下钢琴键的事件
       handlePianoKey(event) {
         const pressedKey = event.detail.key;
-        if(this.gameStarted){
+        if (this.gameStarted) {
           this.checkNote(pressedKey);
+        } else {
+          // 显示提示信息
+          this.showStartPrompt = true;
         }
+      },
 
+      // ...其他方法
+
+      closeStartPrompt() {
+        this.showStartPrompt = false;
       },
-      
-      // 处理用户按下键盘按键的事件
-      handleKeyDown(event) {
-        // 这里可以添加物理键盘映射到钢琴键的逻辑
-        // 目前不处理，因为项目中已有对应逻辑
-      },
-      
+
+
       //计时器
       startInactivityTimer() {
         // 清除之前的计时器
         this.clearInactivityTimer();
         // 设置新的计时器
         this.inactivityTimer = setTimeout(() => {
+          this.timedOut = true; // 设置超时标志
           this.handleInactivity();
         }, this.maxInactivityTime);
       },
+
       clearInactivityTimer() {
         if (this.inactivityTimer) {
           clearTimeout(this.inactivityTimer);
           this.inactivityTimer = null;
         }
       },
+
       handleInactivity() {
         // 用户无活动，判定为出错并终止游戏
         this.showScoreFeedback();
@@ -371,13 +446,14 @@
       },
 
 
-    // 检查按下的键是否是当前需要按的音符
+    // 检查按下的键是否是当前需要按的音符 三秒未按下键盘或者按错键则结束游戏
     checkNote(keyPressed) {
       if (this.currentNoteIndex >= this.currentSheet.notes.length) {
         return; // 已经完成了所有音符
       }
 
-      const currentNote = this.currentSheet.notes[this.currentNoteIndex];
+      const currentNote = this.currentSheet.notes[this.currentNoteIndex];  //当前音符
+      // 检查按下的键是否与当前音符匹配
       const isCorrect = keyPressed === currentNote.key;
 
       // 记录用户的按键表现
@@ -409,10 +485,17 @@
       }else {
         // 按错了，给出反馈
         // this.startInactivityTimer();
-        this.showScoreFeedback();
+          setTimeout(() => {
+            alert('按错了！');
+            this.showScoreFeedback();
+          }, 500);
+        // this.showScoreFeedback();
 
       }
     },
+
+
+
       // 计算得分
       calculateScore() {
       let totalNotes = this.currentSheet.notes.length;
@@ -467,10 +550,53 @@
       };
     },
 
+
+    // 在游戏结束时调用
+
+    //  showScoreFeedback() {
+    //     this.finalScore = this.calculateScore();
+    //     this.practiceCompleted = this.currentNoteIndex === this.currentSheet.notes.length;
+
+    //     // if (!this.practiceCompleted) {
+    //     //   // 收集错误详情
+    //     //   this.errorDetails = [];
+    //     //   if (this.timedOut) {
+    //     //     this.errorDetails.push("错误原因: 超时未按下键盘");
+    //     //   } else {
+    //     //     const incorrectNote = this.currentSheet.notes[this.currentNoteIndex];
+    //     //     this.errorDetails.push(`错误原因: 按错键，正确键应为 ${incorrectNote.noteName}`);
+    //     //   }
+    //     // }
+
+    //     completed = this.practiceCompleted;
+    //     const historyItem = {
+    //       songName: this.currentSheet.title,
+    //       score: this.finalScore.totalScore,
+    //       time: new Date().toISOString(), // 使用ISO时间格式存储
+    //       completed: completed,
+    //       errorReason: completed ? null : (this.timedOut ? 'timeout' : 'wrongKey')
+    //     };
+
+    //     this.saveHistory(historyItem);
+
+    //     this.isScoreFeedbackVisible = true;
+    //     this.resetPractice();
+    // },
+// 在游戏结束时调用
     showScoreFeedback() {
-      this.finalScore = this.calculateScore(); // 确保在显示反馈前计算评分
+      this.finalScore = this.calculateScore();
+      const completed = this.currentNoteIndex === this.currentSheet.notes.length;
+
+      const historyItem = {
+        songName: this.currentSheet.title,
+        score: this.finalScore.totalScore,
+        time: new Date().toISOString(), // 使用ISO时间格式存储
+        completed: completed,
+        errorReason: completed ? null : (this.timedOut ? 'timeout' : 'wrongKey')
+      };
+
+      this.saveHistory(historyItem);
       this.isScoreFeedbackVisible = true;
-      this.saveHistory(); // 保存历史记录
       this.resetPractice();
     },
 
@@ -511,46 +637,108 @@
         this.waitingForFirstNote = true; // 重置等待状态
         this.startMessageVisible=false; // 隐藏开始提示信息
         this.gameStarted = false; // 重置游戏状态
-      },
+ 
+},
+    
 
       // 开始提示弹窗
       startGame() {
 
       // // 这里可以添加其他初始化游戏的逻辑
       this.clearInactivityTimer();
-      this.waitingForFirstNote = false;
-      this.startInactivityTimer();
+      this.waitingForFirstNote = true;
+
+      // this.startInactivityTimer();
       this.highlightCurrentNote();
 
       this.gameStarted = true;
       this.startMessageVisible = true;
+
   },
-      saveHistory() {
-          const now = new Date();
-          const formattedDate = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()} ${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-          const historyItem = {
-            songName: this.currentSheet.title,
-            score: this.finalScore.totalScore,
-            time: formattedDate
-          };
-          
-          // 加载现有的历史记录
-          let existingHistory = JSON.parse(localStorage.getItem('pianoPracticeHistory') || '[]');
-          
-          // 添加新的历史记录
-          existingHistory.push(historyItem);
-          
-          // 保存回本地存储
-          localStorage.setItem('pianoPracticeHistory', JSON.stringify(existingHistory));
-          
-          // 更新组件内的历史记录
-          this.historyRecords = existingHistory;
-        },
-    
-      loadHistory() {
-        // 加载历史记录
-        this.historyRecords = JSON.parse(localStorage.getItem('pianoPracticeHistory') || '[]');
+
+
+  // 历史记录相关方法
+
+
+    formatTime(isoTime) {
+    const date = new Date(isoTime);
+    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
+  },
+
+
+    // 保存历史记录
+      saveHistory(historyItem) {
+        let existingHistory = JSON.parse(localStorage.getItem('pianoPracticeHistory') || '[]');
+        existingHistory.push(historyItem);
+        localStorage.setItem('pianoPracticeHistory', JSON.stringify(existingHistory));
+        this.historyRecords = existingHistory;
+        this.filteredHistory = [...this.historyRecords];
+
+        console.log('Loaded history records:', historyItem);
+        // console.log('History records:', this.historyRecords);
+        console.log('Filtered history:', this.filteredHistory);
+
+      },
+
+    // 删除单条历史记录
+    deleteHistory(index) {
+      this.filteredHistory.splice(index, 1);
+      this.historyRecords = [...this.filteredHistory];
+      localStorage.setItem('pianoPracticeHistory', JSON.stringify(this.historyRecords));
+    },
+
+    // 删除全部历史记录
+    deleteAllHistory() {
+      if (confirm('确定要删除所有历史记录吗？')) {
+        this.historyRecords = [];
+        this.filteredHistory = [];
+        localStorage.removeItem('pianoPracticeHistory');
       }
+    },
+
+    // 排序历史记录
+    sortHistory(criteria) {
+      this.historySort = criteria;
+      this.filteredHistory.sort((a, b) => {
+        if (criteria === 'time') {
+          return new Date(b.time) - new Date(a.time);
+        } else if (criteria === 'score') {
+          return b.score - a.score;
+        }
+        return 0;
+      });
+    },
+
+    
+
+    // 切换批量删除模式
+    toggleBatchDelete() {
+      this.batchDelete = !this.batchDelete;
+      this.selectedRecords = [];
+    },
+
+    // 删除选中的历史记录
+    deleteSelectedHistory() {
+      if (this.selectedRecords.length === 0) {
+        alert('请选择要删除的历史记录');
+        return;
+      }
+      if (confirm(`确定要删除 ${this.selectedRecords.length} 条历史记录吗？`)) {
+        // 按索引降序排序，避免删除时索引变化影响
+        this.selectedRecords.sort((a, b) => b - a).forEach(index => {
+          this.filteredHistory.splice(index, 1);
+        });
+        this.historyRecords = [...this.filteredHistory];
+        localStorage.setItem('pianoPracticeHistory', JSON.stringify(this.historyRecords));
+        this.selectedRecords = [];
+        this.batchDelete = false;
+      }
+    },
+      toggleHistory() {
+    this.showHistory = !this.showHistory;
+    console.log('showHistory:', this.showHistory);
+  }
+
   }
 
   };
@@ -753,84 +941,116 @@
     }
     
     // 评分反馈弹窗样式
-    .score-feedback {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
+
+  .score-feedback {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 25px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    border-radius: 12px;
+    width: 80%;
+    max-width: 500px;
+    z-index: 1000;
+    text-align: center;
+
+    .feedback-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #f0f0f0;
+      padding-bottom: 15px;
+
+      h3 {
+        margin: 0;
+        font-size: 20px;
+        color: #333;
+      }
+
+      .close-btn {
+        font-size: 22px;
+        cursor: pointer;
+        color: #666;
+        transition: color 0.2s;
+      }
+
+      .close-btn:hover {
+        color: #333;
+      }
+    }
+
+    .feedback-content {
+      margin-bottom: 25px;
+    }
+
+    .score-overview {
+      margin: 20px 0;
+      h4 {
+        font-size: 24px;
+        margin: 0;
+        color: #333;
+      }
+      .score-number {
+        font-size: 36px;
+        font-weight: bold;
+        color: #ff9500;
+        display: block;
+        font-family: 'Arial', sans-serif;
+      }
+    }
+
+    .score-details {
+      background: #f9f9f9;
       padding: 20px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
       border-radius: 8px;
-      width: 80%;
-      max-width: 500px;
-      z-index: 1000;
-      text-align: center;
-  
-      .feedback-header {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 15px;
-        
-        h3 {
-          margin: 0;
-        }
-        
-        .close-btn {
-          font-size: 24px;
-          cursor: pointer;
-          opacity: 0.6;
-          
-          &:hover {
-            opacity: 1;
-          }
-        }
+      margin-bottom: 20px;
+      text-align: left;
+      p {
+        margin: 10px 0;
+        color: #333;
+        font-size: 16px;
       }
-  
-      .score-overview {
-        margin: 20px 0;
-        
-        h4 {
-          font-size: 24px;
-          margin: 0;
-        }
-        
-        .score-number {
-          font-size: 32px;
-          font-weight: bold;
-          color: #ff9500;
-        }
+    }
+
+    .error-details {
+      background: #fff8e1;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      text-align: left;
+      h4 {
+        margin-top: 0;
+        color: #f57c00;
+        font-size: 18px;
       }
-  
-      .score-details {
-        background: #f5f5f5;
-        padding: 15px;
-        border-radius: 6px;
-        margin-bottom: 20px;
-        
-        p {
-          margin: 10px 0;
-          color: #333;
-        }
-      }
-  
-      .feedback-footer {
-        .btn-close {
-          background: #0166bd;
-          color: white;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 4px;
-          cursor: pointer;
+      ul {
+        list-style-type: none;
+        padding: 0;
+        li {
+          padding: 8px 0;
+          color: #e65100;
           font-size: 16px;
-          transition: background 0.3s;
-          
-          &:hover {
-            background: #0277dc;
-          }
         }
       }
     }
+
+    .feedback-footer {
+      .btn-close {
+        background: #0166bd;
+        color: white;
+        border: none;
+        padding: 12px 25px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
+      }
+    }
+  }
+ 
     .start-message {
       position: absolute;
       top: 20px;
@@ -849,63 +1069,179 @@
     
     /* 历史记录弹窗样式 */
     .history-feedback {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      padding: 20px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      border-radius: 8px;
-      width: 80%;
-      max-width: 500px;
-      z-index: 1000;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 25px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border-radius: 16px;
+    width: 80%;
+    max-width: 500px;
+    z-index: 1000;
 
-      .feedback-header {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 15px;
-        
-        h3 {
-          margin: 0;
-        }
-        
-        .close-btn {
-          font-size: 24px;
-          cursor: pointer;
-          opacity: 0.6;
-          
-          &:hover {
-            opacity: 1;
-          }
-        }
+    .feedback-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #f0f0f0;
+
+      h3 {
+        margin: 0;
+        font-size: 18px;
+        color: #333;
       }
 
-      .history-content {
-        max-height: 400px;
-        overflow-y: auto;
-      }
-
-      .history-list {
-        width: 100%;
-        border-collapse: collapse;
-      }
-
-      .history-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 10px 0;
-        border-bottom: 1px solid #eee;
-      }
-
-      .history-song, .history-score, .history-time {
-        flex: 1;
-      }
-
-      .history-song {
-        font-weight: bold;
+      .close-btn {
+        font-size: 20px;
+        cursor: pointer;
+        color: #666;
       }
     }
+
+    .history-filters {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .filter-btn {
+      padding: 8px 12px;
+      background: #f5f5f5;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+
+      &:hover {
+        background: #e0e0e0;
+      }
+    }
+
+    .batch-delete {
+      margin-bottom: 15px;
+    }
+
+    .batch-delete-btn {
+      padding: 8px 12px;
+      background: #f5f5f5;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .history-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+    }
+
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 10px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .history-song {
+      flex: 2;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .history-score, .history-time {
+      flex: 1;
+      text-align: center;
+      color: #555;
+    }
+
+    .history-status {
+      flex: 2;
+      text-align: right;
+      color: #555;
+      font-size: 14px;
+    }
+
+    .delete-btn {
+      margin-left: 10px;
+      padding: 3px 8px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .delete-all-container, .delete-selected-container {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .delete-all-btn, .delete-selected-btn {
+      padding: 8px 16px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+  }
+
+
+  .start-prompt {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+
+  .prompt-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    max-width: 400px;
+    width: 80%;
+  }
+
+  .prompt-content h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+  }
+
+  .prompt-content p {
+    margin-bottom: 20px;
+  }
+
+  .prompt-content .btn-close {
+    background: #0166bd;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.3s;
+  }
+
+  .prompt-content .btn-close:hover {
+    background: #0277dc;
+  }
 
 
 
