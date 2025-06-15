@@ -1,5 +1,9 @@
 <template>
   <div class="piano-sts">
+    <div class="loading-overlay" v-if="loading">
+      <div class="spinner"></div>
+      <p>加载中...</p>
+    </div>
     <div class="form-ct">
       <div class="form">
         <div class="sts-row">
@@ -27,8 +31,11 @@
             <option value="9.jpg">9</option>
             <option value="10.jpg">10</option>
             <option value="11.jpg">11</option>
-            <option value="12.jpg">12</option>   
+            <option value="12.jpg">12</option>
+            <option value="custom">自定义</option>
           </select>
+          <input type="file" ref="fileInput" @change="handleFileChange" style="display: none" />
+          <xw-button type="primary" @click="selectFile">选择文件</xw-button>
         </div>
       </div>
     </div>
@@ -62,7 +69,8 @@ export default {
   },
   data() {
     return {
-      selectedBackground: localStorage.getItem('background') || 'pianobg.jpg'
+      selectedBackground: localStorage.getItem('background') || 'pianobg.jpg',
+      loading: false,
     }
   },
   mounted() {
@@ -83,13 +91,32 @@ export default {
     },
   },
   methods: {
+    selectFile() {
+      this.$refs.fileInput.click();
+    },
+    handleFileChange(event) {
+      const file = event.target.files[0];
+      if (file) {
+        this.loading = true;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const customBackground = e.target.result;
+          this.$store.commit('SET_BACKGROUND', customBackground);
+          localStorage.setItem('background', customBackground);
+          this.selectedBackground = 'custom';
+          this.applyBackground();
+          this.loading = false;
+        };
+        reader.readAsDataURL(file);
+      }
+    },
     scaleCG(v) {
       let s = this.state.cacheConf.scale;
       s += v;
       if (s < 1) {
         s = 1;
-      } else if (s > 20) {
-        s = 20;
+      } else if (s > 5) {
+        s = 5;
       }
       this.state.cacheConf.scale = s;
       this.$nextTick(resize);
@@ -111,18 +138,28 @@ export default {
     },
     // settings.vue的methods部分修改
     applyBackground() {
-      const bg = this.selectedBackground || 'pianobg.jpg';
-      document.body.style.backgroundImage = `url(${require(`@/assets/${bg}`)})`;
-      document.body.style.backgroundSize = 'cover';
-      document.body.style.backgroundRepeat = 'no-repeat';
-      document.body.style.backgroundPosition = 'center center';
+      const bg = this.$store.state.background || 'pianobg.jpg';
+      const style = document.documentElement.style;
+      if (bg.startsWith('data:image')) {
+        style.backgroundImage = `url(${bg})`;
+      } else {
+        style.backgroundImage = `url(${require(`@/assets/${bg}`)})`;
+      }
+      style.backgroundSize = '100% auto';
+      style.backgroundRepeat = 'no-repeat';
+      style.backgroundPosition = 'center top';
+      style.backgroundAttachment = 'fixed';
     },
     // 切换背景时更新 Vuex 和 localStorage
     changeBackground() {
-      const bg = this.selectedBackground || 'pianobg.jpg';
-      this.$store.commit('SET_BACKGROUND', bg);
-      localStorage.setItem('background', bg);
-      this.applyBackground(); // 立即生效
+      if (this.selectedBackground === 'custom') {
+        this.$refs.fileInput.click();
+      } else {
+        const bg = this.selectedBackground || 'pianobg.jpg';
+        this.$store.commit('SET_BACKGROUND', bg);
+        localStorage.setItem('background', bg);
+        this.applyBackground(); // 立即生效
+      }
     }
   },
 };
@@ -135,8 +172,37 @@ export default {
 
 <style lang="stylus">
 @import '../comp/btn.styl';
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 .piano-sts{
     height 100%;
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1001;
+      color: white;
+      .spinner {
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top: 4px solid white;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+      }
+      p {
+        margin-top: 10px;
+      }
+    }
     font-size 15px;
     >.form-ct {
         position absolute;
