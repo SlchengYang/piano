@@ -8,7 +8,6 @@
     >
       <div ref="blacks" class="black" />
       <div ref="whites" class="white" />
-      <div ref="centerC" class="center-c" />
     </div>
     <!-- <pre class="info">{{ infos.join('\n') }}</pre> -->
   </div>
@@ -40,12 +39,14 @@ export default {
   mounted() {
     this.init();
     this.initEvent();
-    this.$refs.centerC.innerText = '中央C';
 
     setKeyBoard(this);
     
     // 监听高亮音符事件
     window.addEventListener('highlightNote', this.handleHighlightNote);
+    window.addEventListener('playCoil', (event) => {
+      this.playCoilAnimation(event.detail.key, event.detail.duration);
+    });
     
     // 监听钢琴按键事件，用于发送到自由练习组件
     keypress.onDown((keys = []) => {
@@ -60,9 +61,22 @@ export default {
   
   beforeDestroy() {
     window.removeEventListener('highlightNote', this.handleHighlightNote);
+    window.removeEventListener('playCoil', this.playCoilAnimation);
   },
 
   methods: {
+    playCoilAnimation(key, duration) {
+      if (this.keyDoms && this.keyDoms[key]) {
+        const keyElement = this.keyDoms[key];
+        const coil = keyElement.querySelector('.coil');
+        if (coil) {
+          coil.style.animation = 'none';
+          // eslint-disable-next-line no-void
+          void coil.offsetWidth;
+          coil.style.animation = `coil-animation ${duration}s linear`;
+        }
+      }
+    },
     // 处理高亮提示事件 - 修复版本
     handleHighlightNote(event) {
       const keyToHighlight = event.detail.key;
@@ -153,6 +167,9 @@ export default {
           const key = parseInt(item.getAttribute('data-key'), 10);
           if (key) {
             keyDoms[key] = item;
+            const coil = document.createElement('div');
+            coil.className = 'coil';
+            item.appendChild(coil);
           }
         }
       }
@@ -396,6 +413,13 @@ export default {
                 background-color #c783b2;
                 border-color #0008;
             }
+            >.pckey {
+                position: absolute;
+                width: 100%;
+                bottom: 5px;
+                font-size: 12px;
+                color: #fff;
+            }
             &.highlight {
                 background-color: #ff9500;
                 border-color: #ff6d00;
@@ -443,6 +467,13 @@ export default {
                 bottom: 10px;
                 font-size: 12px;
             }
+            >.pckey {
+                position: absolute;
+                width: 100%;
+                bottom: 30px;
+                font-size: 14px;
+                color: #a43983;
+            }
         }
     }
     &.hidenum {
@@ -450,20 +481,37 @@ export default {
             display: none;
         }
     }
-    >.center-c {
-        position: absolute;
-        bottom: 35px;
-        left: 925px;
-        font-size: 12px;
-        color: #A43983;
-        z-index: 5;
-        pointer-events: none;
-    }
 }
 
 @keyframes keyPulse {
     0% { opacity: 1; }
     50% { opacity: 0.6; }
     100% { opacity: 1; }
+}
+
+.coil {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    border: 2px solid #ff9500;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    box-sizing: border-box;
+}
+
+@keyframes coil-animation {
+    from {
+        width: 0;
+        height: 0;
+        opacity: 1;
+    }
+    to {
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+    }
 }
 </style>
