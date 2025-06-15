@@ -1,4 +1,24 @@
-// import runtime from '@/lib/runtime';
+import getDefaultPckeyMap from '../pckey-key';
+import { getKeyConfig } from './keyboard-pc';
+
+const defaultPckeyMap = getDefaultPckeyMap();
+const pcKeyConfig = getKeyConfig();
+
+const key2pckey = {};
+Object.keys(defaultPckeyMap).forEach((pckey) => {
+  const key = defaultPckeyMap[pckey];
+  if (!key2pckey[key]) {
+    key2pckey[key] = [];
+  }
+  key2pckey[key].push(pckey);
+});
+
+const pckeyCode2keyName = {};
+pcKeyConfig.forEach((row) => {
+  row.forEach((item) => {
+    pckeyCode2keyName[item.c] = item.n;
+  });
+});
 
 // export const keymap = {};
 // 画键盘时，对应位置
@@ -47,7 +67,9 @@ for (let j = 0, bcount = 0; j < 88; j += 1) {
     const ycode = code12[yu];
     const ucode = i < 28 ? ycode : ycode.toLowerCase();
 
-    baip += `<div data-key='${i}'><span>${i}</span><div>${ucode}${sbp}</div></div>`;
+    const pckeys = key2pckey[i] || [];
+    const pckeyNames = pckeys.length > 0 ? (pckeyCode2keyName[pckeys[0]] || '') : '';
+    baip += `<div data-key='${i}'><div class="pckey">${pckeyNames}</div><span>${i}</span><div>${ucode}${sbp}</div></div>`;
 
     keyNameList[i] = `${ucode}${sbpnum}`;
 
@@ -61,9 +83,11 @@ for (let j = 0, bcount = 0; j < 88; j += 1) {
     const ycode = code12[yu - 1];
     const ucode = i < 28 ? ycode : ycode.toLowerCase();
 
+    const pckeys = key2pckey[i] || [];
+    const pckeyNames = pckeys.length > 0 ? (pckeyCode2keyName[pckeys[0]] || '') : '';
     const hj = heiKeyArray.length - 1;
     heip += `<div data-key='${i}' style="left:${baiKeyWidth * hj
-      + pstOffset[yu]}px;"><span>${i}</span></div>`;
+      + pstOffset[yu]}px;"><div class="pckey">${pckeyNames}</div><span>${i}</span></div>`;
 
     keyNameList[i] = `#${ucode}${sbpnum}`;
 
@@ -75,6 +99,9 @@ for (let j = 0, bcount = 0; j < 88; j += 1) {
     heiKeyArray[heiKeyArray.length - 1] = i;
   }
 }
+
+export const blackDom = heip;
+export const whiteDom = baip;
 
 for (let i = 1; i < 89; i += 1) {
   const kpitem = keyPositonArray[i];
@@ -99,9 +126,6 @@ for (let i = 1; i < 89; i += 1) {
 
 
 // console.log(baiKeyArray, heiKeyArray);
-
-export const blackDom = heip;
-export const whiteDom = baip;
 
 /**
  * 通过坐标获取当前是按的哪个key
