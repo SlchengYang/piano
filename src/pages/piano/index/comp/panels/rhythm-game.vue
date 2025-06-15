@@ -2,7 +2,7 @@
     <div class="free-practice">
       <div class="fp-header">
         <h2>评分模式</h2>
-        <p>请按照乐谱顺序弹奏钢琴键，超过3秒未按下键盘视为失败，结束时将会给出综合评分</p>
+        <p>请按照乐谱弹奏，若超过3秒未按键则视为失败。结束后将给出评分。</p>
       </div>
 
 
@@ -21,17 +21,18 @@
                 }"
               >
                 <div class="note-name">{{ note.noteName }}</div>
+                <div class="keyboard-key">{{ getKeyboardKeyName(note) }}</div>
                 <div class="character">{{ formatDuration(note.duration) }}</div>
                 <div class="duration">{{note.duration}}</div>
               </div>
             </div>
           </div>
-
+          <div class="feedback-display" :class="feedbackClass">{{ currentFeedback }}</div>
         </div>
         
         <div class="controls">
           <button class="btn-select" @click="selectSheet">选择乐谱</button>
-          <button class="btn-reset" @click="resetPractice">重新开始</button>
+          <button class="btn-reset" @click="restartGame">重新开始</button>
           <button class="btn-start" @click="startGame" v-if="currentSheet.title">开始游戏</button>
           <button class="btn-history" @click="toggleHistory" v-if="currentSheet.title">历史记录</button>
         </div>
@@ -109,7 +110,11 @@
 
       <!-- 添加提示信息 -->
       <div class="start-message" v-if="startMessageVisible">
-        游戏已开始！请按照乐谱顺序弹奏钢琴键。
+        {{ startMessageText }}
+      </div>
+
+      <div class="selection-message" v-if="selectionMessageVisible">
+        {{ selectionMessageText }}
       </div>
 
       <!-- 历史记录弹窗 -->
@@ -159,6 +164,7 @@
   
   <script>
   import { keypress } from '../piano-control';
+  import { getKeyConfig } from '../keyboard-pc';
   
   // 简单的乐谱数据格式
   const sheetData = [
@@ -306,6 +312,9 @@
 
         gameStarted: false, // 游戏是否已开始
         startMessageVisible: false, // 是否显示“游戏已开始”提示
+        startMessageText: '', // 提示信息内容
+        selectionMessageVisible: false, // 是否显示“选择乐谱”提示
+        selectionMessageText: '', // 选择乐谱提示信息内容
         timedOut: false, // 是否超时未按下键盘
 
         // 历史记录相关数据
@@ -316,10 +325,18 @@
         batchDelete: false, // 是否处于批量删除模式
         selectedRecords: [], // 选中的历史记录索引
         showStartPrompt: false, // 是否显示开始提示弹窗
+        currentFeedback: '', // 当前的反馈信息
+        feedbackTimeout: null, // 反馈信息计时器
+        startTime: 0, // 游戏开始时间
+        lastNoteTime: 0, // 上一个音符的按键时间
+        beatDuration: 600, // 每拍的毫秒数
+        keyCodeToName: {}, // keyCode到按键名称的映射
       };
     },
     
     mounted() {
+      // 初始化keyCode到按键名称的映射
+      this.initKeyCodeToNameMapping();
       // 初始化钢琴键到键盘按键的映射
       this.initPianoToKeyboardMapping();
       
@@ -403,6 +420,21 @@
           }
         });
       },
+
+      // 初始化keyCode到按键名称的映射
+      initKeyCodeToNameMapping() {
+        const kbdConfig = getKeyConfig();
+        kbdConfig.forEach(row => {
+          row.forEach(key => {
+            this.keyCodeToName[key.c] = key.n;
+          });
+        });
+      },
+
+      getKeyboardKeyName(note) {
+        const keyCode = this.pianoKeyToKeyboardKey[note.key];
+        return this.keyCodeToName[keyCode] || '';
+      },
       
       handlePianoKey(event) {
         const pressedKey = event.detail.key;
@@ -452,21 +484,37 @@
         return; // 已经完成了所有音符
       }
 
+      const pressTime = new Date().getTime();
       const currentNote = this.currentSheet.notes[this.currentNoteIndex];  //当前音符
+      const expectedTime = (this.lastNoteTime || this.startTime) + currentNote.duration * this.beatDuration;
+      const timeDiff = Math.abs(pressTime - expectedTime);
+
       // 检查按下的键是否与当前音符匹配
       const isCorrect = keyPressed === currentNote.key;
 
-      // 记录用户的按键表现
-      this.userPerformance.push({
+      let performance = {
         note: currentNote,
         keyPressed: keyPressed,
         isCorrect: isCorrect,
-        timestamp: new Date().getTime(), // 记录按键时间
-      });
+        timestamp: pressTime,
+        accuracy: 'miss'
+      };
 
       if (isCorrect) {
-        // 按对了，进行到下一个音符
+        if (timeDiff < 150) { // Perfect
+          performance.accuracy = 'perfect';
+        } else if (timeDiff < 300) { // Good
+          performance.accuracy = 'good';
+        } else { // Correct key, wrong timing
+          performance.accuracy = 'good'; // Or a different category
+        }
+        this.showFeedback(performance.accuracy);
+        
+        if (navigator.vibrate) {
+          navigator.vibrate(100);
+        }
         this.currentNoteIndex++;
+        this.lastNoteTime = pressTime;
 
         // 重置计时器
         this.startInactivityTimer();
@@ -480,27 +528,58 @@
             alert('恭喜您完成了这首曲子！');
             this.showScoreFeedback();
           }, 500);
-
         }
-      }else {
-        // 按错了，给出反馈
-        // this.startInactivityTimer();
+      } else {
+        performance.accuracy = 'miss';
+        this.showFeedback('miss');
+        // 按错了，游戏继续
+        this.currentNoteIndex++;
+        this.lastNoteTime = pressTime;
+
+        // 重置计时器
+        this.startInactivityTimer();
+        this.waitingForFirstNote = false;
+
+        if (this.currentNoteIndex < this.currentSheet.notes.length) {
+          this.highlightCurrentNote();
+        } else {
+          // 完成了整首曲子
           setTimeout(() => {
-            alert('按错了！');
+            alert('恭喜您完成了这首曲子！');
             this.showScoreFeedback();
           }, 500);
-        // this.showScoreFeedback();
-
+        }
       }
+      this.userPerformance.push(performance);
     },
 
 
+
+      showFeedback(type) {
+        this.currentFeedback = type;
+        if (this.feedbackTimeout) {
+          clearTimeout(this.feedbackTimeout);
+        }
+        this.feedbackTimeout = setTimeout(() => {
+          this.currentFeedback = '';
+        }, 500);
+      },
 
       // 计算得分
       calculateScore() {
       let totalNotes = this.currentSheet.notes.length;
       let correctNotes = this.userPerformance.filter(item => item.isCorrect).length;
-      let accuracy = correctNotes / totalNotes;
+      let accuracy = totalNotes > 0 ? correctNotes / totalNotes : 0;
+
+      // 根据 'perfect' 和 'good' 计算得分
+      let scoreFromAccuracy = this.userPerformance.reduce((acc, perf) => {
+        if (perf.accuracy === 'perfect') {
+          return acc + 2;
+        } else if (perf.accuracy === 'good') {
+          return acc + 1;
+        }
+        return acc;
+      }, 0);
 
       // 计算连贯性（按键是否连续正确）
       let consecutiveCorrect = 0;
@@ -524,21 +603,22 @@
           const prevNote = this.userPerformance[i - 1].note;
           const prevTimestamp = this.userPerformance[i - 1].timestamp;
           const currentTimestamp = this.userPerformance[i].timestamp;
-          const expectedDuration = prevNote.duration * 1000; // 假设每拍1秒
+          const expectedDuration = prevNote.duration * this.beatDuration;
           const actualDuration = currentTimestamp - prevTimestamp;
-          if (Math.abs(actualDuration - expectedDuration) < 200) { // 允许200毫秒的误差
+          if (Math.abs(actualDuration - expectedDuration) < 300) { // 允许300毫秒的误差
             totalRhythmMatch++;
           }
-          rhythmAccuracy = totalRhythmMatch / (this.userPerformance.length - 1);
         }
+        rhythmAccuracy = (this.userPerformance.length > 1) ? (totalRhythmMatch / (this.userPerformance.length - 1)) : 0;
       }
 
       // 综合评分（可以根据需要调整权重）
-      const accuracyWeight = 0.5;
-      const consecutiveWeight = 0.3;
+      const accuracyWeight = 0.7;
+      const consecutiveWeight = 0.1;
       const rhythmWeight = 0.2;
+      const maxPossibleScore = totalNotes > 0 ? totalNotes * 2 : 1; // 每个 'perfect' 2分
       const totalScore = 
-        accuracy * accuracyWeight + 
+        (scoreFromAccuracy / maxPossibleScore) * accuracyWeight + 
         (maxConsecutiveCorrect / totalNotes) * consecutiveWeight + 
         rhythmAccuracy * rhythmWeight;
 
@@ -609,6 +689,12 @@
             detail: { key: note.key }
           });
           window.dispatchEvent(event);
+
+          // 触发线圈动画
+          const coilEvent = new CustomEvent('playCoil', {
+            detail: { key: note.key, duration: note.duration * this.beatDuration / 1000 }
+          });
+          window.dispatchEvent(coilEvent);
         }
       },
       
@@ -623,7 +709,11 @@
         this.currentSheet = sheet;
         this.resetPractice();
         this.showSheetSelection = false;
-        this.showStartPrompt = true; // 显示开始提示弹窗
+        this.selectionMessageText = `已选择乐谱: ${sheet.title}`;
+        this.selectionMessageVisible = true;
+        setTimeout(() => {
+          this.selectionMessageVisible = false;
+        }, 3000);
       },
       
       // 重置练习
@@ -638,23 +728,33 @@
         this.startMessageVisible=false; // 隐藏开始提示信息
         this.gameStarted = false; // 重置游戏状态
  
-},
+      },
+
+      restartGame() {
+        this.resetPractice();
+        this.startMessageText = '游戏已重新开始！请按照乐谱顺序弹奏钢琴键。';
+        this.startGame();
+      },
     
 
       // 开始提示弹窗
       startGame() {
+        this.startTime = new Date().getTime();
+        this.lastNoteTime = this.startTime;
+        // // 这里可以添加其他初始化游戏的逻辑
+        this.clearInactivityTimer();
+        this.waitingForFirstNote = true;
 
-      // // 这里可以添加其他初始化游戏的逻辑
-      this.clearInactivityTimer();
-      this.waitingForFirstNote = true;
+        // this.startInactivityTimer();
+        this.highlightCurrentNote();
 
-      // this.startInactivityTimer();
-      this.highlightCurrentNote();
+        this.gameStarted = true;
+        if (!this.startMessageText) {
+          this.startMessageText = '游戏已开始！请按照乐谱顺序弹奏钢琴键。';
+        }
+        this.startMessageVisible = true;
 
-      this.gameStarted = true;
-      this.startMessageVisible = true;
-
-  },
+      },
 
 
   // 历史记录相关方法
@@ -739,8 +839,12 @@
     console.log('showHistory:', this.showHistory);
   }
 
-  }
-
+  },
+  computed: {
+    feedbackClass() {
+      return this.currentFeedback;
+    }
+  },
   };
   </script>
   
@@ -765,17 +869,20 @@
       }
     }
     /* 提示信息样式 */
-    .start-message {
+    .start-message, .selection-message {
       position: absolute;
       top: 20px;
       right: 20px;
-      background-color: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 15px;
+      background-color: rgba(255, 255, 255, 0.9);
+      color: #333;
+      padding: 15px 20px;
       border-radius: 8px;
       z-index: 100;
       text-align: center;
       max-width: 300px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border-left: 4px solid #0166bd;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
     .sheet-container {
@@ -854,6 +961,13 @@
                 color: white;
               }
             }
+            
+            &:hover {
+              color: #267cc6;
+              border-color: #267cc6;
+              box-shadow: 0 0 0.3em #0003;
+              z-index: 5;
+            }
           }
         }
       }
@@ -884,6 +998,11 @@
             &:hover {
               background: #e53935;
             }
+          }
+          
+          &:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
           }
         }
       }
@@ -1243,7 +1362,37 @@
     background: #0277dc;
   }
 
+  .feedback-display {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1.5);
+    font-size: 3em;
+    font-weight: bold;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: all 0.3s ease-out;
+    z-index: 100;
+  }
 
+  .feedback-display.perfect {
+    color: #FFD700; /* Gold */
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .feedback-display.good {
+    color: #32CD32; /* LimeGreen */
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .feedback-display.miss {
+    color: #FF6347; /* Tomato */
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 
   }
   </style>
