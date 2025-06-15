@@ -159,6 +159,14 @@
         </div>
       </div>
 
+      <!-- 礼花效果 -->
+      <div class="confetti-container" v-if="showConfetti">
+        <div class="confetti" v-for="i in 300" :key="i" :style="getConfettiStyle()"></div>
+      </div>
+      <!-- 鞭炮效果 -->
+      <div class="firecracker-container" v-if="showFirecracker">
+        <div class="firecracker"></div>
+      </div>
     </div>
   </template>
   
@@ -331,6 +339,8 @@
         lastNoteTime: 0, // 上一个音符的按键时间
         beatDuration: 600, // 每拍的毫秒数
         keyCodeToName: {}, // keyCode到按键名称的映射
+        showConfetti: false,
+        showFirecracker: false,
       };
     },
     
@@ -524,6 +534,7 @@
           this.highlightCurrentNote();
         } else {
           // 完成了整首曲子
+          this.triggerConfetti();
           setTimeout(() => {
             alert('恭喜您完成了这首曲子！');
             this.showScoreFeedback();
@@ -544,6 +555,7 @@
           this.highlightCurrentNote();
         } else {
           // 完成了整首曲子
+          this.triggerConfetti();
           setTimeout(() => {
             alert('恭喜您完成了这首曲子！');
             this.showScoreFeedback();
@@ -553,7 +565,32 @@
       this.userPerformance.push(performance);
     },
 
+    triggerConfetti() {
+      this.showConfetti = true;
+      this.showFirecracker = true;
+      setTimeout(() => {
+        this.showConfetti = false;
+        this.showFirecracker = false;
+      }, 3000); // 3秒后隐藏礼花和鞭炮
+    },
 
+    getConfettiStyle() {
+      const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
+      const x = Math.random() * 100; // vw
+      const y = Math.random() * 100; // vh
+      const rotation = Math.random() * 360; // deg
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      const animationDuration = 2 + Math.random() * 3; // seconds
+      const animationDelay = Math.random() * 2; // seconds
+
+      return {
+        left: `${x}vw`,
+        top: `${y - 10}vh`, // Start above the screen
+        backgroundColor: color,
+        transform: `rotate(${rotation}deg)`,
+        animation: `fall ${animationDuration}s linear ${animationDelay}s forwards`,
+      };
+    },
 
       showFeedback(type) {
         this.currentFeedback = type;
@@ -1392,6 +1429,82 @@
     color: #FF6347; /* Tomato */
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
+  }
+
+  .confetti-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    overflow: hidden;
+  }
+
+  .confetti {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    opacity: 0;
+  }
+
+  @keyframes fall {
+    0% {
+      opacity: 1;
+      transform: translateY(-10vh) rotateZ(0deg);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(110vh) rotateZ(720deg);
+    }
+  }
+
+  .firecracker-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10000;
+    pointer-events: none;
+  }
+
+  .firecracker {
+    width: 20px;
+    height: 200px;
+    background: red;
+    position: relative;
+    animation: firecracker-explode 1s ease-out forwards;
+  }
+
+  .firecracker::before, .firecracker::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 40px;
+    background: gold;
+  }
+
+  .firecracker::before {
+    top: -20px;
+  }
+
+  .firecracker::after {
+    bottom: -20px;
+  }
+
+  @keyframes firecracker-explode {
+    0% {
+      transform: scale(0);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.5);
+    }
+    100% {
+      transform: scale(0.5) rotate(360deg);
+      opacity: 0;
+    }
   }
 
   }
