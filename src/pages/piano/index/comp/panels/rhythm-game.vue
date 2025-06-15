@@ -1367,7 +1367,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%) scale(1.5);
-    font-size: 3em;
+    font-size: 5em;
     font-weight: bold;
     color: white;
     text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
