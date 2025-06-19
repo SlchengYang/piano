@@ -159,56 +159,6 @@
     </div>
      
 
-      <!-- 评分反馈弹窗 -->
-      <!-- <div class="score-feedback" v-if="isScoreFeedbackVisible">
-        <div class="feedback-header">
-          <h3 v-if="practiceCompleted">练习完成反馈</h3>
-          <h3 v-else>很遗憾</h3>
-          <span class="close-btn" @click="isScoreFeedbackVisible = false">×</span>
-        </div>
-        <div class="feedback-content">
-          <div class="score-overview">
-            <h4 v-if="practiceCompleted">综合评分: <span class="score-number">{{ finalScore.totalScore }}</span>/100</h4>
-            <h4 v-else>练习未完成</h4>
-          </div>
-          <div class="score-details" v-if="practiceCompleted">
-            <p>准确性: {{ finalScore.accuracy }}%</p>
-            <p>连贯性: {{ finalScore.maxConsecutiveCorrect }}个连续正确</p>
-            <p>节奏准确性: {{ finalScore.rhythmAccuracy }}%</p>
-          </div>
-          <div class="error-details" v-if="!practiceCompleted && errorDetails.length > 0">
-            <h4>错误详情:</h4>
-            <ul>
-              <li v-for="(error, index) in errorDetails" :key="index">
-                {{ error }}
-              </li>
-            </ul>
-          </div>
-        </div>
-        <div class="feedback-footer">
-          <button class="btn-close" @click="isScoreFeedbackVisible = false">关闭</button>
-        </div>
-      </div> -->
-      <!-- 评分反馈弹窗 -->
-      <div class="score-feedback" v-if="isScoreFeedbackVisible">
-        <div class="feedback-header">
-          <h3>练习评分反馈</h3>
-          <span class="close-btn" @click="isScoreFeedbackVisible = false">×</span>
-        </div>
-        <div class="feedback-content">
-          <div class="score-overview">
-            <h4>综合评分: <span class="score-number">{{ finalScore.totalScore }}</span>/100</h4>
-          </div>
-          <div class="score-details">
-            <p>准确性: {{ finalScore.accuracy }}%</p>
-            <p>连贯性: {{ finalScore.maxConsecutiveCorrect }}个连续正确</p>
-            <p>节奏准确性: {{ finalScore.rhythmAccuracy }}%</p>
-          </div>
-        </div>
-        <div class="feedback-footer">
-          <button class="btn-close" @click="isScoreFeedbackVisible = false">关闭</button>
-        </div>
-      </div>
 
 
       <!-- 添加提示信息 -->
@@ -270,7 +220,9 @@
       <div class="firecracker-container" v-if="showFirecracker">
         <div class="firecracker"></div>
       </div>
-    <div v-if="showResult" class="result-panel">
+      <!-- 最终结束反馈弹窗 -->
+    <!-- <div v-if="showResult" class="result-panel">
+
       <div class="result-content">
         <h2 class="result-title">演奏结束！</h2>
         <div class="result-summary">
@@ -286,7 +238,67 @@
           <span class="btn-icon">返回</span>
         </button>
       </div>
+    </div> -->
+    
+    <div v-if="showResult" class="result-panel">
+  <div class="result-content">
+    <h2 class="result-title">演奏结束！</h2>
+    
+    <!-- 原始结果内容 -->
+    <div class="result-summary">
+      <p>最终得分: <span class="final-score">{{ finalScore.totalScore }}</span></p>
+      <p>最大连击: <span class="max-combo">{{ maxCombo }}</span></p>
     </div>
+    
+    <!-- 原始细节统计 -->
+    <div class="result-details">
+      <p class="detail-item perfect">Perfect: <span>{{ perfect }}</span></p>
+      <p class="detail-item good">Good: <span>{{ good }}</span></p>
+      <p class="detail-item miss">Miss: <span>{{ miss }}</span></p>
+    </div>
+    
+    <!-- 优化后的评分反馈内容 -->
+    <div class="score-feedback-card">
+      <div class="score-feedback-header">
+        <h3 class="feedback-title">详细评分反馈</h3>
+        <div class="score-badge">
+          <span class="score-badge-text">{{ finalScore.totalScore }}</span>
+          <span class="score-badge-label">/100</span>
+        </div>
+      </div>
+      
+      <div class="score-feedback-body">
+        <div class="score-metric">
+          <div class="metric-label">准确性</div>
+          <div class="metric-value">{{ finalScore.accuracy }}%</div>
+          <div class="metric-bar">
+            <div class="metric-progress" :style="{ width: finalScore.accuracy + '%' }"></div>
+          </div>
+        </div>
+        
+        <div class="score-metric">
+          <div class="metric-label">连贯性</div>
+          <div class="metric-value">{{ finalScore.maxConsecutiveCorrect }}个连续正确</div>
+          <div class="consecutive-counter"></div>
+        </div>
+        
+        <div class="score-metric">
+          <div class="metric-label">节奏准确性</div>
+          <div class="metric-value">{{ finalScore.rhythmAccuracy }}%</div>
+          <div class="metric-bar">
+            <div class="metric-progress" :style="{ width: finalScore.rhythmAccuracy + '%' }"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 关闭按钮 -->
+    <button class="action-btn btn-back" @click="showResult = false">
+      <span class="btn-icon">关闭</span>
+    </button>
+  </div>
+</div>
+
   </div>
 </template>
   
@@ -412,7 +424,153 @@
         { key: 52, noteName: 'c2', duration: 1 },
         { key: 52, noteName: 'c2', duration: 1 }
       ]
-    }
+    },
+        {
+    id: 4,
+    title: '梁祝',
+    difficulty:'hard' ,
+    notes: [
+      { key: 32, noteName: 'e0', duration: 2 },
+      { key: 35, noteName: 'g0', duration: 1.5 },
+      { key: 37, noteName: 'a0', duration: 1 },
+      { key: 40, noteName: 'c1', duration: 1.5 },
+      { key: 42, noteName: 'd1', duration: 0.5 },
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 40, noteName: 'c1', duration: 0.5 },
+      { key: 35, noteName: 'g0', duration: 1 },
+      { key: 47, noteName: 'g1', duration: 1.5 },
+      { key: 52, noteName: 'c2', duration: 0.5 },
+      { key: 49, noteName: 'a1', duration: 0.5 },
+      { key: 47, noteName: 'g1', duration: 0.5 },
+      { key: 44, noteName: 'e1', duration: 0.5 },
+      { key: 47, noteName: 'g1', duration: 0.5 },
+      { key: 42, noteName: 'd1', duration: 2 },
+
+      { key: 42, noteName: 'd1', duration: 1.5 },
+      { key: 44, noteName: 'e1', duration: 0.5 },
+      { key: 39, noteName: 'b0', duration: 1 },
+      { key: 37, noteName: 'a0', duration: 1 },
+      { key: 35, noteName: 'g0', duration: 1.5 },
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 40, noteName: 'c1', duration: 1 },
+      { key: 42, noteName: 'd1', duration: 1 },
+      { key: 32, noteName: 'e0', duration: 1 },
+      { key: 40, noteName: 'c1', duration: 1 },
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 35, noteName: 'g0', duration: 0.5 },
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 40, noteName: 'c1', duration: 0.5 },
+      { key: 35, noteName: 'g0', duration: 2 },
+
+      { key: 44, noteName: 'e1', duration: 1.5 },
+      { key: 47, noteName: 'g1', duration: 0.5 },
+      { key: 39, noteName: 'b0', duration: 1 },
+      { key: 42, noteName: 'd1', duration: 1 },
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 40, noteName: 'c1', duration: 0.5 },
+      { key: 35, noteName: 'g0', duration: 2 },
+
+      { key: 32, noteName: 'e0', duration: 1.5 },
+      { key: 35, noteName: 'g0', duration: 0.5 },
+      { key: 32, noteName: 'e0', duration: 1 },
+      { key: 35, noteName: 'g0', duration: 1.5 },
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 39, noteName: 'b0', duration: 0.5 },
+      { key: 42, noteName: 'd1', duration: 0.5 },
+      { key: 37, noteName: 'a0', duration: 2 },
+
+      { key: 35, noteName: 'g0', duration: 0.5 },
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 40, noteName: 'c1', duration: 1.5 },
+      { key: 42, noteName: 'd1', duration: 0.5 },
+      { key: 47, noteName: 'g1', duration: 1 },
+      { key: 44, noteName: 'e1', duration: 1 },
+      { key: 42, noteName: 'd1', duration: 1 },
+      { key: 44, noteName: 'e1', duration: 0.5 },
+      { key: 42, noteName: 'd1', duration: 0.5 },
+      { key: 40, noteName: 'c1', duration: 1 },
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 35, noteName: 'g0', duration: 0.5 },
+      { key: 32, noteName: 'e0', duration: 1 },
+      { key: 40, noteName: 'c1', duration: 1 },
+
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 40, noteName: 'c1', duration: 0.5 },
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 35, noteName: 'g0', duration: 0.5 },
+      { key: 32, noteName: 'e0', duration: 0.5 },
+      { key: 35, noteName: 'g0', duration: 0.5 },
+      { key: 37, noteName: 'a0', duration: 0.5 },
+      { key: 40, noteName: 'c1', duration: 0.5 },
+      { key: 35, noteName: 'g0', duration: 2 }
+    ]
+  },
+  {
+    id: 5,
+    title: '甩葱歌',
+    difficulty:'medium' ,
+    notes: [
+      { key: 44, noteName: 'e1', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 1.5 },
+      { key: 51, noteName: 'b1', duration: 0.5 },
+      { key: 52, noteName: 'c2', duration: 0.5 },
+      { key: 52, noteName: 'c2', duration: 0.5 },
+      { key: 49, noteName: 'a1', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 0.5 },
+      { key: 52, noteName: 'c2', duration: 0.5 },
+      { key: 51, noteName: 'b1', duration: 1 },
+      { key: 47, noteName: 'g1', duration: 1 },
+      { key: 47, noteName: 'g1', duration: 1 },
+      { key: 47, noteName: 'g1', duration: 1 },
+      { key: 51, noteName: 'b1', duration: 0.5 },
+      { key: 51, noteName: 'b1', duration: 0.5 },
+      { key: 49, noteName: 'a1', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 1.5 },
+
+      { key: 44, noteName: 'e1', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 1.5 },
+      { key: 51, noteName: 'b1', duration: 0.5 },
+      { key: 52, noteName: 'c2', duration: 0.5 },
+      { key: 52, noteName: 'c2', duration: 0.5 },
+      { key: 49, noteName: 'a1', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 0.5 },
+      { key: 52, noteName: 'c2', duration: 1 },
+      { key: 56, noteName: 'e2', duration: 0.5 },
+      { key: 56, noteName: 'e2', duration: 0.5 },
+      { key: 56, noteName: 'e2', duration: 0.5 },
+      { key: 54, noteName: 'd2', duration: 1 },
+      { key: 52, noteName: 'c2', duration: 1 },
+      { key: 51, noteName: 'b1', duration: 1 },
+      { key: 52, noteName: 'c2', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 0.5 },
+      { key: 49, noteName: 'a1', duration: 0.5 },
+
+      { key: 49, noteName: 'a1', duration: 0.5 },
+      { key: 52, noteName: 'c2', duration: 1 },
+      { key: 56, noteName: 'e2', duration: 0.5 },
+      { key: 56, noteName: 'e2', duration: 0.5 },
+      { key: 54, noteName: 'd2', duration: 1 },
+      { key: 52, noteName: 'c2', duration: 1 },
+      { key: 51, noteName: 'b1', duration: 1 },
+      { key: 47, noteName: 'g1', duration: 1 },
+
+      { key: 47, noteName: 'g1', duration: 0.5 },
+      { key: 47, noteName: 'g1', duration: 0.5 },
+      { key: 47, noteName: 'g1', duration: 0.5 },
+      { key: 54, noteName: 'b2', duration: 1 },
+      { key: 54, noteName: 'd2', duration: 1 },
+      { key: 54, noteName: 'd2', duration: 1 },
+      { key: 52, noteName: 'c2', duration: 1 },
+      { key: 51, noteName: 'b1', duration: 1 },
+      { key: 52, noteName: 'c2', duration: 1 },
+      { key: 49, noteName: 'a1', duration: 0.5 },
+      { key: 49, noteName: 'a1', duration: 0.5 },
+    ]
+  }
   ];
   
   export default {
@@ -2084,107 +2242,220 @@
     }
 
     // 结果面板样式
-    .result-panel {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.8);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1001;
-      animation: fadeIn 0.5s ease;
+.result-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  animation: fadeIn 0.5s ease;
 
-      .result-content {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        border-radius: 20px;
-        padding: 40px;
-        text-align: center;
-        color: white;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        max-width: 400px;
-        width: 90%;
-        animation: modalSlideIn 0.5s ease;
+  .result-content {
 
-        .result-title {
-          font-size: 28px;
-          margin-bottom: 30px;
+
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 20px;
+    padding: 40px;
+    text-align: center;
+    color: white;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    width: 90%;
+    height: 90vh; /* 设置高度 */
+    overflow-y: auto; /* 添加滚动条 */
+    animation: modalSlideIn 0.5s ease;
+
+
+    .result-title {
+      font-size: 28px;
+      margin-bottom: 30px;
+      font-weight: bold;
+    }
+
+    .result-summary {
+      margin-bottom: 30px;
+
+      p {
+        font-size: 18px;
+        margin: 10px 0;
+      }
+
+      .final-score {
+        font-size: 32px;
+        font-weight: bold;
+        color: #ffd43b;
+      }
+
+      .max-combo {
+        font-size: 24px;
+        font-weight: bold;
+        color: #51cf66;
+      }
+    }
+
+    .result-details {
+      margin-bottom: 30px;
+
+      .detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        margin: 5px 0;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        font-size: 16px;
+
+        &.perfect {
+          background: rgba(255, 212, 59, 0.2);
+        }
+
+        &.good {
+          background: rgba(81, 207, 102, 0.2);
+        }
+
+        &.miss {
+          background: rgba(255, 107, 107, 0.2);
+        }
+
+        span {
           font-weight: bold;
-        }
-
-        .result-summary {
-          margin-bottom: 30px;
-
-          p {
-            font-size: 18px;
-            margin: 10px 0;
-          }
-
-          .final-score {
-            font-size: 32px;
-            font-weight: bold;
-            color: #ffd43b;
-          }
-
-          .max-combo {
-            font-size: 24px;
-            font-weight: bold;
-            color: #51cf66;
-          }
-        }
-
-        .result-details {
-          margin-bottom: 30px;
-
-          .detail-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px;
-            margin: 5px 0;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            font-size: 16px;
-
-            &.perfect {
-              background: rgba(255, 212, 59, 0.2);
-            }
-
-            &.good {
-              background: rgba(81, 207, 102, 0.2);
-            }
-
-            &.miss {
-              background: rgba(255, 107, 107, 0.2);
-            }
-
-            span {
-              font-weight: bold;
-              font-size: 18px;
-            }
-          }
-        }
-
-        .btn-back {
-          padding: 12px 30px;
-          background: rgba(255, 255, 255, 0.2);
-          border: 2px solid white;
-          border-radius: 25px;
-          color: white;
-          font-size: 16px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-
-          &:hover {
-            background: white;
-            color: #667eea;
-            transform: translateY(-2px);
-          }
+          font-size: 18px;
         }
       }
     }
+
+    /* 优化后的评分反馈样式 */
+    .score-feedback-card {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 15px;
+    padding: 25px;
+    margin: 30px 0;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-align: left;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    max-height: 70%; /* 添加最大高度限制 */
+    overflow-y: auto; /* 添加滚动条 */
+
+      &:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    .score-feedback-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .feedback-title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #ffd43b;
+    }
+
+    .score-badge {
+      display: flex;
+      align-items: center;
+      background: linear-gradient(135deg, #ffd43b, #ff9800);
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .score-badge-text {
+      font-size: 24px;
+      margin-right: 5px;
+    }
+
+    .score-badge-label {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .score-feedback-body {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .score-metric {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .metric-label {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .metric-value {
+      font-size: 18px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .metric-bar {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .metric-progress {
+      height: 100%;
+      background: linear-gradient(90deg, #ffd43b, #ff9800);
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    .consecutive-counter {
+      width: 30px;
+      height: 30px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      color: white;
+      margin-left: 10px;
+    }
+
+    .btn-back {
+      padding: 12px 30px;
+      background: rgba(255, 255, 255, 0.2);
+      border: 2px solid white;
+      border-radius: 25px;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+
+      &:hover {
+        background: white;
+        color: #667eea;
+        transform: translateY(-2px);
+      }
+    }
+  }
+}
 
     // 历史记录弹窗样式
     .history-feedback {

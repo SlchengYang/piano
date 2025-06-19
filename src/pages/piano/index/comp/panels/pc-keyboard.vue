@@ -97,10 +97,10 @@
       <div class="row">
         <pcKeyboardSaveSys />
       </div>
-      <div class="row-title">
+      <!-- <div class="row-title">
         FAQ :
-      </div>
-      <faq
+      </div> -->
+      <!-- <faq
         class="row"
         question="有些玩家在吐槽专区问到为什么不能按下黑键？"
         answer="
@@ -112,7 +112,7 @@
         class="row"
         question="为什么我的电脑键盘有的键不能多个同时按下去？"
         answer="键盘生产商在生产键盘时做了限制。有些键盘生产商为了节省开支，会把许多键放在一条线路上，这样相同区域的多个键被同时按下时，只会有一个键起作用。"
-      />
+      /> -->
     </div>
   </div>
 </template>
