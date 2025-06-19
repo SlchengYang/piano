@@ -1,59 +1,162 @@
 <template>
-    <div class="free-practice">
-      <div class="fp-header">
-        <h2>评分模式</h2>
-        <p>请按照乐谱弹奏，若超过3秒未按键则视为失败。结束后将给出评分。</p>
+  <div class="rhythm-game">
+    <!-- 背景装饰 -->
+    <div class="background-decoration">
+      <div class="music-note note-1">♪</div>
+      <div class="music-note note-2">♫</div>
+      <div class="music-note note-3">♩</div>
+      <div class="music-note note-4">♬</div>
+    </div>
+
+    <div class="fp-header">
+      <div class="header-content">
+        <h2 class="main-title">
+          <span class="title-icon">🎯</span>
+          节奏游戏模式
+          <span class="title-decoration"></span>
+        </h2>
+        <p class="subtitle">请按照乐谱弹奏，若超过3秒未按键则视为失败。结束后将给出评分。</p>
+        
+        <!-- 游戏状态指示器 -->
+        <div class="game-status-container">
+          <div class="status-info">
+            <span class="status-text">状态: {{ gameStatusText }}</span>
+            <span class="score-display" v-if="currentScore > 0">得分: {{ currentScore }}</span>
+            <span class="combo-display" v-if="combo > 0">连击: {{ combo }}</span>
+          </div>          <div class="evaluation-display">{{ evaluation }}</div>
+          <div class="progress-bar" v-if="gameStarted">
+            <div class="progress-fill" :style="{ width: (currentNoteIndex / currentSheet.notes.length) * 100 + '%' }"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sheet-container">
+      <div class="sheet-header">
+        <div class="sheet-info">
+          <h3 class="sheet-title">
+            <span class="sheet-icon">🎵</span>
+            {{ currentSheet.title || '示例乐谱' }}
+          </h3>
+          <div class="sheet-meta">
+            <span class="difficulty" :class="getDifficultyClass(currentSheet.difficulty)">
+              {{ getDifficultyText(currentSheet.difficulty) }}
+            </span>
+            <span class="note-count">{{ currentSheet.notes.length }} 个音符</span>
+          </div>
+        </div>
+        <div class="sheet-actions">
+          <button class="action-btn btn-select" @click="selectSheet">
+            <span class="btn-icon">📚</span>
+            选择乐谱
+          </button>
+          <button class="action-btn btn-reset" @click="restartGame">
+            <span class="btn-icon">🔄</span>
+            重新开始
+          </button>
+          <button class="action-btn btn-start" @click="startGame" v-if="currentSheet.title">
+            <span class="btn-icon">🎮</span>
+            开始游戏
+          </button>
+          <button class="action-btn btn-history" @click="toggleHistory" v-if="currentSheet.title">
+            <span class="btn-icon">📊</span>
+            历史记录
+          </button>
+        </div>
       </div>
 
-
-      <div class="sheet-container">
-        <div class="sheet-title">{{ currentSheet.title || '示例乐谱' }}</div>
-        <div class="sheet-display">
-          <div class="note-list-wrapper" ref="noteListWrapper">
-            <div class="note-list" :style="noteListStyle">
-              <div 
-                v-for="(note, index) in currentSheet.notes" 
-                :key="index"
-                class="note-item"
-                :class="{ 
-                  'current': currentNoteIndex === index,
-                  'completed': index < currentNoteIndex
-                }"
-              >
+      <div class="sheet-display">
+        <div class="note-list-wrapper" ref="noteListWrapper">
+          <div class="note-list" :style="noteListStyle">
+            <div
+              v-for="(note, index) in currentSheet.notes"
+              :key="index"
+              class="note-item"
+              :class="{
+                'current': currentNoteIndex === index,
+                'completed': index < currentNoteIndex,
+                'upcoming': index === currentNoteIndex + 1
+              }"
+            >
+              <div class="note-content">
                 <div class="note-name">{{ note.noteName }}</div>
-                <div class="keyboard-key">{{ getKeyboardKeyName(note) }}</div>
-                <div class="character">{{ formatDuration(note.duration) }}</div>
-                <div class="duration">{{note.duration}}</div>
+                <div class="note-symbol">{{ formatDuration(note.duration) }}</div>
+                <div class="note-duration">{{ note.duration }}拍</div>
+              </div>
+              <div class="note-indicator" v-if="currentNoteIndex === index">
+                <div class="pulse-ring"></div>
               </div>
             </div>
           </div>
-          <div class="feedback-display" :class="feedbackClass">{{ currentFeedback }}</div>
         </div>
         
-        <div class="controls">
-          <button class="btn-select" @click="selectSheet">选择乐谱</button>
-          <button class="btn-reset" @click="restartGame">重新开始</button>
-          <button class="btn-start" @click="startGame" v-if="currentSheet.title">开始游戏</button>
-          <button class="btn-history" @click="toggleHistory" v-if="currentSheet.title">历史记录</button>
+        <!-- 反馈显示 -->
+        <div class="feedback-display" :class="feedbackClass" v-if="currentFeedback">
+          {{ currentFeedback }}
+        </div>
+        
+        <!-- 下一个音符预览 -->
+        <div class="next-note-preview" v-if="currentNoteIndex < currentSheet.notes.length && gameStarted">
+          <div class="preview-label">下一个音符</div>
+          <div class="preview-note">
+            <span class="preview-name">{{ currentSheet.notes[currentNoteIndex].noteName }}</span>
+            <span class="preview-symbol">{{ formatDuration(currentSheet.notes[currentNoteIndex].duration) }}</span>
+          </div>
         </div>
       </div>
-  
-      <div class="sheet-selection" v-if="showSheetSelection">
+    </div>
+
+    <!-- 改进的乐谱选择弹窗 -->
+    <div class="sheet-selection-overlay" v-if="showSheetSelection" @click="showSheetSelection = false">
+      <div class="sheet-selection" @click.stop>
         <div class="selection-header">
-          <h3>选择乐谱</h3>
-          <span class="close-btn" @click="showSheetSelection = false">×</span>
+          <h3>
+            <span class="header-icon">🎼</span>
+            选择乐谱
+          </h3>
+          <button class="close-btn" @click="showSheetSelection = false">
+            <span>✕</span>
+          </button>
         </div>
+        
         <div class="sheet-list">
           <div
             v-for="(sheet, index) in availableSheets"
             :key="index"
             class="sheet-item"
+            :class="{ 'active': sheet.id === currentSheet.id }"
             @click="loadSheet(sheet)"
           >
-            {{ sheet.title }}
+            <div class="sheet-preview">
+              <div class="sheet-cover">
+                <span class="cover-icon">🎵</span>
+              </div>
+              <div class="sheet-details">
+                <h4 class="sheet-name">{{ sheet.title }}</h4>
+                <div class="sheet-stats">
+                  <span class="stat-item">
+                    <span class="stat-icon">🎹</span>
+                    {{ sheet.notes.length }} 音符
+                  </span>
+                  <span class="stat-item difficulty-badge" :class="getDifficultyClass(sheet.difficulty)">
+                    {{ getDifficultyText(sheet.difficulty) }}
+                  </span>
+                </div>
+                <div class="sheet-preview-notes">
+                  <span v-for="(note, i) in sheet.notes.slice(0, 8)" :key="i" class="preview-note-mini">
+                    {{ note.noteName }}
+                  </span>
+                  <span v-if="sheet.notes.length > 8" class="more-notes">...</span>
+                </div>
+              </div>
+            </div>
+            <div class="selection-indicator" v-if="sheet.id === currentSheet.id">
+              <span>✓</span>
+            </div>
           </div>
         </div>
       </div>
+    </div>
      
 
       <!-- 评分反馈弹窗 -->
@@ -167,18 +270,38 @@
       <div class="firecracker-container" v-if="showFirecracker">
         <div class="firecracker"></div>
       </div>
+    <div v-if="showResult" class="result-panel">
+      <div class="result-content">
+        <h2 class="result-title">演奏结束！</h2>
+        <div class="result-summary">
+          <p>最终得分: <span class="final-score">{{ currentScore }}</span></p>
+          <p>最大连击: <span class="max-combo">{{ maxCombo }}</span></p>
+        </div>
+        <div class="result-details">
+          <p class="detail-item perfect">Perfect: <span>{{ perfect }}</span></p>
+          <p class="detail-item good">Good: <span>{{ good }}</span></p>
+          <p class="detail-item miss">Miss: <span>{{ miss }}</span></p>
+        </div>
+        <button class="action-btn btn-back" @click="closeResult">
+          <span class="btn-icon">返回</span>
+        </button>
+      </div>
     </div>
-  </template>
+  </div>
+</template>
   
-  <script>
-  import { keypress } from '../piano-control';
+<script>
+  import { miditimeline } from '../piano-control';
   import { getKeyConfig } from '../keyboard-pc';
   
-  // 简单的乐谱数据格式
+  // 改进的乐谱数据格式
   const sheetData = [
     {
       id: 1,
       title: '欢乐颂',
+      difficulty: 'easy',
+      composer: '贝多芬',
+      description: '经典的欢乐颂主题，适合初学者练习',
       notes: [
         { key: 44, noteName: 'e1', duration: 1 },
         { key: 44, noteName: 'e1', duration: 1 },
@@ -200,6 +323,9 @@
     {
       id: 2,
       title: '小星星',
+      difficulty: 'easy',
+      composer: '传统儿歌',
+      description: '最受欢迎的儿童歌曲，简单易学',
       notes: [
         { key: 40, noteName: 'c1', duration: 1 },
         { key: 40, noteName: 'c1', duration: 1 },
@@ -220,6 +346,9 @@
     {
       id: 3,
       title: '刻在我心底的名字',
+      difficulty: 'medium',
+      composer: '卢广仲',
+      description: '热门流行歌曲，节奏变化丰富',
       notes: [
         { key: 59, noteName: 'g2', duration: 1 },
         { key: 59, noteName: 'g2', duration: 1 },
@@ -299,15 +428,14 @@
         noteListStyle: {
           transform: 'translateX(0)'
         },
-
-
+        
+        // 游戏状态
+        gameStarted: false,
+        currentScore: 0,
         
         // 评分反馈相关数据
-
         isScoreFeedbackVisible: false,
-        // finalScore需要在这里声明
         finalScore: null,
-        pianoKeyToKeyboardKey: {}, // 钢琴键到键盘按键的映射
         userPerformance: [], // 存储用户的按键表现记录
         practiceCompleted: false, // 是否完成练习
         errorDetails: [], // 错误详情
@@ -341,19 +469,23 @@
         keyCodeToName: {}, // keyCode到按键名称的映射
         showConfetti: false,
         showFirecracker: false,
+        // 新增状态
+        combo: 0,
+        maxCombo: 0,
+        perfect: 0,
+        good: 0,
+        miss: 0,        evaluation: '',
+        showResult: false,
+        lastKeyPressTime: 0, // 添加防重复按键的时间戳
+        keyPressDelay: 150, // 按键间隔限制（毫秒）
       };
-    },
-    
-    mounted() {
+    },    mounted() {
       // 初始化keyCode到按键名称的映射
       this.initKeyCodeToNameMapping();
       // 初始化钢琴键到键盘按键的映射
       this.initPianoToKeyboardMapping();
       
-      // 监听键盘按下事件
-      document.addEventListener('keydown', this.handleKeyDown);
-      
-      // 监听钢琴按键事件
+      // 只监听钢琴按键事件，避免重复
       window.addEventListener('pianoKeyPress', this.handlePianoKey);
       
       // 高亮显示第一个音符
@@ -362,20 +494,20 @@
       // 计算可视区域内能显示的音符数量
       this.calculateVisibleNoteCount();
 
+      // 加载历史记录
+      this.loadHistory();
 
-        // 启动计时器
-        // this.startInactivityTimer();
         // 监听窗口大小变化
         window.addEventListener('resize', this.calculateVisibleNoteCount);
+        miditimeline.on('hit', this.handleGameEvent);
+        miditimeline.on('miss', this.handleGameEvent);
     },
-    
-    beforeDestroy() {
+      beforeDestroy() {
       // 移除事件监听器
-      // 清除计时器
-
-      document.removeEventListener('keydown', this.handleKeyDown);
       window.removeEventListener('pianoKeyPress', this.handlePianoKey);
       window.removeEventListener('resize', this.calculateVisibleNoteCount);
+      miditimeline.off('hit', this.handleGameEvent);
+      miditimeline.off('miss', this.handleGameEvent);
     },
     
     methods: {
@@ -393,6 +525,20 @@
         return durationMap[duration] || duration;
       },
       
+      // 获取难度等级的CSS类名
+      getDifficultyClass(difficulty) {
+        return `difficulty-${difficulty || 'easy'}`;
+      },
+        // 获取难度等级的显示文本
+      getDifficultyText(difficulty) {
+        const difficultyMap = {
+          'easy': '简单',
+          'medium': '中等',
+          'hard': '困难'
+        };
+        return difficultyMap[difficulty] || '简单';
+      },
+      
       // 计算可视区域内能显示的音符数量
       calculateVisibleNoteCount() {
         if (this.$refs.noteListWrapper) {
@@ -407,13 +553,20 @@
         // 计算需要滚动的距离
         let scrollPosition = 0;
         
-        if (this.currentNoteIndex >= this.visibleNoteCount/2) {
-          // 当当前音符索引超过可视区域时开始滚动
-          scrollPosition = (this.currentNoteIndex - (this.visibleNoteCount - 1)) * this.noteItemWidth;
+        // 当当前音符索引超过可视区域的一半时开始滚动
+        if (this.currentNoteIndex >= Math.floor(this.visibleNoteCount / 2)) {
+          // 让当前音符保持在可视区域的中心位置
+          const centerOffset = Math.floor(this.visibleNoteCount / 2);
+          scrollPosition = Math.max(0, (this.currentNoteIndex - centerOffset) * this.noteItemWidth);
+          
+          // 确保不会滚动超过最后几个音符
+          const maxScroll = Math.max(0, (this.currentSheet.notes.length - this.visibleNoteCount) * this.noteItemWidth);
+          scrollPosition = Math.min(scrollPosition, maxScroll);
         }
         
         this.noteListStyle = {
-          transform: `translateX(-${scrollPosition}px)`
+          transform: `translateX(-${scrollPosition}px)`,
+          transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
         };
       },
       
@@ -444,9 +597,16 @@
       getKeyboardKeyName(note) {
         const keyCode = this.pianoKeyToKeyboardKey[note.key];
         return this.keyCodeToName[keyCode] || '';
-      },
-      
-      handlePianoKey(event) {
+      },      handlePianoKey(event) {
+        const currentTime = Date.now();
+        
+        // 防止重复按键
+        if (currentTime - this.lastKeyPressTime < this.keyPressDelay) {
+          return;
+        }
+        
+        this.lastKeyPressTime = currentTime;
+        
         const pressedKey = event.detail.key;
         if (this.gameStarted) {
           this.checkNote(pressedKey);
@@ -454,6 +614,28 @@
           // 显示提示信息
           this.showStartPrompt = true;
         }
+      },
+
+      // 处理键盘按键事件
+      handleKeyDown(event) {
+        // 防止重复触发
+        if (event.repeat) {
+          return;
+        }
+        
+        if (this.gameStarted) {
+          // 获取按键对应的钢琴键
+          const pianoKey = this.$store.state.cacheConf.pckey2key[event.keyCode];
+          if (pianoKey) {
+            this.checkNote(pianoKey);
+          }
+        }
+      },
+
+      // 处理游戏事件（如果需要的话）
+      handleGameEvent(event) {
+        // 这里可以处理来自 miditimeline 的事件
+        console.log('Game event:', event);
       },
 
       // ...其他方法
@@ -485,17 +667,14 @@
         // 用户无活动，判定为出错并终止游戏
         this.showScoreFeedback();
         // this.resetPractice();
-      },
-
-
-    // 检查按下的键是否是当前需要按的音符 三秒未按下键盘或者按错键则结束游戏
+      },    // 检查按下的键是否是当前需要按的音符
     checkNote(keyPressed) {
       if (this.currentNoteIndex >= this.currentSheet.notes.length) {
         return; // 已经完成了所有音符
       }
 
       const pressTime = new Date().getTime();
-      const currentNote = this.currentSheet.notes[this.currentNoteIndex];  //当前音符
+      const currentNote = this.currentSheet.notes[this.currentNoteIndex];
       const expectedTime = (this.lastNoteTime || this.startTime) + currentNote.duration * this.beatDuration;
       const timeDiff = Math.abs(pressTime - expectedTime);
 
@@ -511,20 +690,50 @@
       };
 
       if (isCorrect) {
-        if (timeDiff < 150) { // Perfect
+        // 更新评价统计
+        if (timeDiff < 100) { // Perfect: 100ms内
           performance.accuracy = 'perfect';
-        } else if (timeDiff < 300) { // Good
+          this.perfect++;
+          this.currentScore += 300;
+          this.combo++;
+        } else if (timeDiff < 250) { // Good: 250ms内
           performance.accuracy = 'good';
-        } else { // Correct key, wrong timing
-          performance.accuracy = 'good'; // Or a different category
+          this.good++;
+          this.currentScore += 200;
+          this.combo++;
+        } else { // Late but correct
+          performance.accuracy = 'good';
+          this.good++;
+          this.currentScore += 100;
+          this.combo++;
         }
+        
+        // 更新最大连击
+        if (this.combo > this.maxCombo) {
+          this.maxCombo = this.combo;
+        }
+        
+        // 连击奖励
+        if (this.combo >= 10) {
+          this.currentScore += 50;
+        } else if (this.combo >= 20) {
+          this.currentScore += 100;
+        }
+        
+        // 立即显示反馈
         this.showFeedback(performance.accuracy);
+        this.updateEvaluation(performance.accuracy);
         
         if (navigator.vibrate) {
           navigator.vibrate(100);
         }
+        
+        // 移动到下一个音符
         this.currentNoteIndex++;
         this.lastNoteTime = pressTime;
+        
+        // 更新音符列表位置（滚动）
+        this.updateNoteListPosition();
 
         // 重置计时器
         this.startInactivityTimer();
@@ -534,18 +743,28 @@
           this.highlightCurrentNote();
         } else {
           // 完成了整首曲子
+          this.showResult = true;
           this.triggerConfetti();
           setTimeout(() => {
-            alert('恭喜您完成了这首曲子！');
             this.showScoreFeedback();
-          }, 500);
+          }, 2000);
         }
       } else {
+        // 按错键了
         performance.accuracy = 'miss';
+        this.miss++;
+        this.combo = 0; // 重置连击
+        
+        // 立即显示反馈
         this.showFeedback('miss');
-        // 按错了，游戏继续
+        this.updateEvaluation('miss');
+        
+        // 按错键时，音符依然前进
         this.currentNoteIndex++;
         this.lastNoteTime = pressTime;
+        
+        // 更新音符列表位置（滚动）
+        this.updateNoteListPosition();
 
         // 重置计时器
         this.startInactivityTimer();
@@ -555,13 +774,14 @@
           this.highlightCurrentNote();
         } else {
           // 完成了整首曲子
+          this.showResult = true;
           this.triggerConfetti();
           setTimeout(() => {
-            alert('恭喜您完成了这首曲子！');
             this.showScoreFeedback();
-          }, 500);
+          }, 2000);
         }
       }
+      
       this.userPerformance.push(performance);
     },
 
@@ -590,16 +810,50 @@
         transform: `rotate(${rotation}deg)`,
         animation: `fall ${animationDuration}s linear ${animationDelay}s forwards`,
       };
-    },
-
-      showFeedback(type) {
-        this.currentFeedback = type;
+    },      showFeedback(type) {
+        // 清除之前的计时器
         if (this.feedbackTimeout) {
           clearTimeout(this.feedbackTimeout);
         }
-        this.feedbackTimeout = setTimeout(() => {
-          this.currentFeedback = '';
-        }, 500);
+        
+        // 设置反馈文本
+        const feedbackTexts = {
+          'perfect': 'PERFECT!',
+          'good': 'GOOD!',
+          'miss': 'MISS!'
+        };
+        
+        this.currentFeedback = feedbackTexts[type] || type.toUpperCase();
+        
+        // 立即显示反馈，无延迟
+        this.$nextTick(() => {
+          // 设置新的计时器来隐藏反馈
+          this.feedbackTimeout = setTimeout(() => {
+            this.currentFeedback = '';
+          }, 1200); // 显示1.2秒
+        });
+      },      updateEvaluation(type) {
+        this.evaluation = type.toUpperCase();
+        // 为评价显示区域添加颜色类
+        this.$nextTick(() => {
+          const evaluationEl = document.querySelector('.evaluation-display');
+          if (evaluationEl) {
+            evaluationEl.className = `evaluation-display ${type.toUpperCase()}`;
+          }
+        });
+        
+        setTimeout(() => {
+          this.evaluation = '';
+          const evaluationEl = document.querySelector('.evaluation-display');
+          if (evaluationEl) {
+            evaluationEl.className = 'evaluation-display';
+          }
+        }, 800);
+      },
+
+      closeResult() {
+        this.showResult = false;
+        this.resetPractice();
       },
 
       // 计算得分
@@ -752,14 +1006,13 @@
           this.selectionMessageVisible = false;
         }, 3000);
       },
-      
-      // 重置练习
+        // 重置练习
       resetPractice() {
         this.currentNoteIndex = 0;
         this.updateNoteListPosition();
         this.highlightCurrentNote();
         this.userPerformance = []; // 重置用户表现记录
-        // ...其他逻辑
+        this.lastKeyPressTime = 0; // 重置按键时间戳
         this.clearInactivityTimer(); // 清除计时器
         this.waitingForFirstNote = true; // 重置等待状态
         this.startMessageVisible=false; // 隐藏开始提示信息
@@ -771,18 +1024,15 @@
         this.resetPractice();
         this.startMessageText = '游戏已重新开始！请按照乐谱顺序弹奏钢琴键。';
         this.startGame();
-      },
-    
-
-      // 开始提示弹窗
+      },        // 开始提示弹窗
       startGame() {
         this.startTime = new Date().getTime();
         this.lastNoteTime = this.startTime;
-        // // 这里可以添加其他初始化游戏的逻辑
+        this.lastKeyPressTime = 0; // 重置按键时间戳
+        
         this.clearInactivityTimer();
         this.waitingForFirstNote = true;
 
-        // this.startInactivityTimer();
         this.highlightCurrentNote();
 
         this.gameStarted = true;
@@ -790,39 +1040,17 @@
           this.startMessageText = '游戏已开始！请按照乐谱顺序弹奏钢琴键。';
         }
         this.startMessageVisible = true;
-
+        miditimeline.gameMode = true;
+        // 重置统计
+        this.combo = 0;
+        this.maxCombo = 0;
+        this.perfect = 0;
+        this.good = 0;
+        this.miss = 0;
+        this.currentScore = 0;
+        this.evaluation = '';
+        this.showResult = false;
       },
-
-
-  // 历史记录相关方法
-
-
-    formatTime(isoTime) {
-    const date = new Date(isoTime);
-    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
-  },
-
-
-    // 保存历史记录
-      saveHistory(historyItem) {
-        let existingHistory = JSON.parse(localStorage.getItem('pianoPracticeHistory') || '[]');
-        existingHistory.push(historyItem);
-        localStorage.setItem('pianoPracticeHistory', JSON.stringify(existingHistory));
-        this.historyRecords = existingHistory;
-        this.filteredHistory = [...this.historyRecords];
-
-        console.log('Loaded history records:', historyItem);
-        // console.log('History records:', this.historyRecords);
-        console.log('Filtered history:', this.filteredHistory);
-
-      },
-
-    // 删除单条历史记录
-    deleteHistory(index) {
-      this.filteredHistory.splice(index, 1);
-      this.historyRecords = [...this.filteredHistory];
-      localStorage.setItem('pianoPracticeHistory', JSON.stringify(this.historyRecords));
-    },
 
     // 删除全部历史记录
     deleteAllHistory() {
@@ -846,9 +1074,7 @@
       });
     },
 
-    
-
-    // 切换批量删除模式
+        // 切换批量删除模式
     toggleBatchDelete() {
       this.batchDelete = !this.batchDelete;
       this.selectedRecords = [];
@@ -871,40 +1097,208 @@
         this.batchDelete = false;
       }
     },
-      toggleHistory() {
-    this.showHistory = !this.showHistory;
-    console.log('showHistory:', this.showHistory);
-  }
 
+    // 保存历史记录
+    saveHistory(record) {
+      this.historyRecords.push(record);
+      localStorage.setItem('pianoPracticeHistory', JSON.stringify(this.historyRecords));
+      this.loadHistory();
+    },
+
+    // 加载历史记录
+    loadHistory() {
+      const saved = localStorage.getItem('pianoPracticeHistory');
+      if (saved) {
+        this.historyRecords = JSON.parse(saved);
+      }
+      this.filteredHistory = [...this.historyRecords];
+      this.sortHistory('time'); // 默认按时间排序
+    },
+
+    // 删除单个历史记录
+    deleteHistory(index) {
+      if (confirm('确定要删除这条历史记录吗？')) {
+        this.filteredHistory.splice(index, 1);
+        this.historyRecords = [...this.filteredHistory];
+        localStorage.setItem('pianoPracticeHistory', JSON.stringify(this.historyRecords));
+      }
+    },
+
+    // 格式化时间
+    formatTime(timeString) {
+      const date = new Date(timeString);
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    },
+
+    toggleHistory() {
+      this.showHistory = !this.showHistory;
+      if (this.showHistory) {
+        this.loadHistory();
+      }
+    }
   },
   computed: {
     feedbackClass() {
       return this.currentFeedback;
+    },
+    gameStatusText() {
+      if (!this.gameStarted) {
+        return '未开始';
+      } else if (this.currentNoteIndex >= this.currentSheet.notes.length) {
+        return '已完成';
+      } else {
+        return '进行中';
+      }
     }
-  },
-  };
-  </script>
+  }
+};
+</script>
   
   <style lang="stylus">
-  .free-practice {
+  .rhythm-game {
+    position: relative;
     padding: 20px;
     height: 100%;
     box-sizing: border-box;
+    overflow: hidden;
     
-    .fp-header {
-      text-align: center;
-      margin-bottom: 20px;
+    // 背景装饰
+    .background-decoration {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
       
-      h2 {
-        font-size: 24px;
-        margin-bottom: 10px;
-      }
-      
-      p {
-        color: #666;
-        font-size: 14px;
+      .music-note {
+        position: absolute;
+        font-size: 2rem;
+        color: rgba(255, 255, 255, 0.1);
+        animation: float 6s ease-in-out infinite;
+        
+        &.note-1 {
+          top: 10%;
+          left: 10%;
+          animation-delay: 0s;
+        }
+        
+        &.note-2 {
+          top: 20%;
+          right: 15%;
+          animation-delay: 1s;
+        }
+        
+        &.note-3 {
+          bottom: 30%;
+          left: 20%;
+          animation-delay: 2s;
+        }
+        
+        &.note-4 {
+          bottom: 15%;
+          right: 10%;
+          animation-delay: 3s;
+        }
       }
     }
+      .fp-header {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      margin-bottom: 15px;
+      
+      .header-content {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 15px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      }
+      
+      .main-title {
+        position: relative;
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 6px;
+        color: #333;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        
+        .title-icon {
+          font-size: 22px;
+          animation: bounce 2s infinite;
+        }
+        
+        .title-decoration {
+          position: absolute;
+          bottom: -3px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 40px;
+          height: 2px;
+          background: linear-gradient(90deg, #667eea, #764ba2);
+          border-radius: 1px;
+        }
+      }
+      
+      .subtitle {
+        color: #666;
+        font-size: 12px;
+        margin-bottom: 10px;
+        line-height: 1.4;
+      }        .game-status-container {
+          margin-top: 10px;
+          
+          .status-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: #555;
+            
+            .score-display {
+              font-weight: bold;
+              color: #667eea;
+            }
+
+            .combo-display {
+              font-weight: bold;
+              color: #51cf66;
+            }
+          }
+
+          .evaluation-display {
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #667eea;
+            min-height: 16px;
+            margin-bottom: 6px;
+            transition: all 0.3s ease;
+          }
+          
+          .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            overflow: hidden;
+            
+            .progress-fill {
+              height: 100%;
+              background: linear-gradient(90deg, #667eea, #764ba2);
+              border-radius: 2px;
+              transition: width 0.3s ease;
+            }
+          }
+        }
+    }
+    
     /* 提示信息样式 */
     .start-message, .selection-message {
       position: absolute;
@@ -921,591 +1315,1051 @@
       border-left: 4px solid #0166bd;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    
-    .sheet-container {
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-      padding: 20px;
+      .sheet-container {
+      position: relative;
+      z-index: 1;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+      padding: 25px;
+      margin-bottom: 20px;
       
-      .sheet-title {
-        font-size: 20px;
-        text-align: center;
-        margin-bottom: 20px;
-        font-weight: bold;
+      .sheet-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+        gap: 20px;
+        
+        .sheet-info {
+          flex: 1;
+          min-width: 250px;
+          
+          .sheet-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            
+            .sheet-icon {
+              font-size: 28px;
+              animation: pulse 2s infinite;
+            }
+          }
+          
+          .sheet-meta {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            
+            .difficulty {
+              padding: 4px 12px;
+              border-radius: 12px;
+              font-size: 12px;
+              font-weight: bold;
+              text-transform: uppercase;
+              
+              &.difficulty-easy {
+                background: #e8f5e8;
+                color: #2e7d32;
+              }
+              
+              &.difficulty-medium {
+                background: #fff3e0;
+                color: #f57c00;
+              }
+              
+              &.difficulty-hard {
+                background: #ffebee;
+                color: #d32f2f;
+              }
+            }
+            
+            .note-count {
+              color: #666;
+              font-size: 14px;
+            }
+          }
+        }
+        
+        .sheet-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          
+          .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            
+            .btn-icon {
+              font-size: 16px;
+            }
+            
+            &.btn-select {
+              background: linear-gradient(135deg, #667eea, #764ba2);
+              color: white;
+              
+              &:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+              }
+            }
+            
+            &.btn-reset {
+              background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+              color: white;
+              
+              &:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+              }
+            }
+            
+            &.btn-start {
+              background: linear-gradient(135deg, #51cf66, #40c057);
+              color: white;
+              
+              &:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(81, 207, 102, 0.4);
+              }
+            }
+            
+            &.btn-history {
+              background: linear-gradient(135deg, #ffd43b, #fab005);
+              color: white;
+              
+              &:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(255, 212, 59, 0.4);
+              }
+            }
+          }
+        }
       }
-      
-      .sheet-display {
-        padding: 15px;
-        background: #f9f9f9;
-        border-radius: 6px;
-        margin-bottom: 20px;
+        .sheet-display {
+        background: linear-gradient(135deg, #f8f9ff, #e8f0ff);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 15px;
         min-height: 100px;
+        border: 2px solid rgba(102, 126, 234, 0.1);
         
         .note-list-wrapper {
           width: 100%;
           overflow: hidden;
           white-space: nowrap;
+          margin-bottom: 20px;
         }
         
         .note-list {
           display: inline-flex;
-          transition: transform 0.3s ease;
+          transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          gap: 8px;
           
           .note-item {
-            padding: 10px 15px;
-            margin: 5px;
-            background: #fff;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            transition: all 0.3s;
+            position: relative;
+            padding: 12px 16px;
+            background: white;
+            border: 2px solid #e0e7ff;
+            border-radius: 8px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-width: 50px;
+            justify-content: center;
+            min-width: 70px;
+            height: 80px;
             flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
             
-            .note-name {
-              font-size: 14px;
-              margin-bottom: 5px;
+            .note-content {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              gap: 2px;
+              height: 100%;
+              
+              .note-name {
+                font-size: 14px;
+                font-weight: 600;
+                color: #333;
+                line-height: 1;
+              }
+              
+              .note-symbol {
+                font-size: 20px;
+                color: #667eea;
+                line-height: 1;
+              }
+              
+              .note-duration {
+                font-size: 11px;
+                color: #666;
+                line-height: 1;
+              }
             }
             
-            .keyboard-key {
-              font-size: 16px;
-              font-weight: bold;
-              color: #0166bd;
+            .note-indicator {
+              position: absolute;
+              top: -5px;
+              right: -5px;
+              width: 20px;
+              height: 20px;
+              
+              .pulse-ring {
+                width: 100%;
+                height: 100%;
+                border: 2px solid #ff6b6b;
+                border-radius: 50%;
+                animation: pulse-ring 1.5s infinite;
+              }
             }
             
             &.current {
-              background: #ff9500;
+              background: linear-gradient(135deg, #ff6b6b, #ee5a24);
               color: white;
-              transform: scale(1.1);
-              font-weight: bold;
-              box-shadow: 0 0 10px rgba(255, 149, 0, 0.5);
+              transform: scale(1.1) translateY(-5px);
+              border-color: #ff6b6b;
+              box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
+              z-index: 2;
               
-              .keyboard-key {
-                color: white;
-                font-size: 20px;
+              .note-content {
+                .note-name, .note-symbol, .note-duration {
+                  color: white;
+                }
               }
             }
             
             &.completed {
-              background: #4caf50;
+              background: linear-gradient(135deg, #51cf66, #40c057);
               color: white;
-              border-color: #4caf50;
+              border-color: #51cf66;
+              transform: scale(0.95);
               
-              .keyboard-key {
-                color: white;
+              .note-content {
+                .note-name, .note-symbol, .note-duration {
+                  color: white;
+                }
               }
             }
             
-            &:hover {
-              color: #267cc6;
-              border-color: #267cc6;
-              box-shadow: 0 0 0.3em #0003;
-              z-index: 5;
+            &.upcoming {
+              border-color: #ffd43b;
+              background: #fff9db;
+              
+              .note-content {
+                .note-symbol {
+                  color: #fab005;
+                }
+              }
             }
+          }
+        }        .feedback-display {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          font-size: 3.5em;
+          font-weight: bold;
+          text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+          opacity: 0;
+          transition: all 0.2s ease-out;
+          z-index: 100;
+          pointer-events: none;
+          
+          &.PERFECT {
+            color: #FFD700;
+            opacity: 1;
+            text-shadow: 0 0 30px #FFD700, 0 0 60px #FFD700, 3px 3px 6px rgba(0,0,0,0.8);
+            animation: perfectBounce 0.8s ease-out;
+          }
+          
+          &.GOOD {
+            color: #32CD32;
+            opacity: 1;
+            text-shadow: 0 0 20px #32CD32, 0 0 40px #32CD32, 3px 3px 6px rgba(0,0,0,0.8);
+            animation: goodSlide 0.6s ease-out;
+          }
+          
+          &.MISS {
+            color: #FF4444;
+            opacity: 1;
+            text-shadow: 0 0 20px #FF4444, 0 0 40px #FF4444, 3px 3px 6px rgba(0,0,0,0.8);
+            animation: missShake 0.6s ease-out;
           }
         }
-      }
-      
-      .controls {
-        display: flex;
-        justify-content: center;
-        margin-top: 20px;
+
+        .evaluation-display {
+          position: absolute;
+          top: 30%;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 1.2em;
+          font-weight: bold;
+          z-index: 99;
+          pointer-events: none;
+          transition: all 0.3s ease;
+          text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+          
+          &.PERFECT {
+            color: #FFD700;
+          }
+          
+          &.GOOD {
+            color: #32CD32;
+          }
+          
+          &.MISS {
+            color: #FF4444;
+          }
+        }
         
-        button {
-          background: #0166bd;
-          color: white;
-          border: none;
-          padding: 10px 20px;
-          margin: 0 10px;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 16px;
-          transition: background 0.3s;
+        .next-note-preview {
+          background: rgba(255, 255, 255, 0.8);
+          border-radius: 10px;
+          padding: 15px;
+          text-align: center;
+          border: 1px solid rgba(102, 126, 234, 0.2);
           
-          &:hover {
-            background: #0277dc;
+          .preview-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
           }
           
-          &.btn-reset {
-            background: #f44336;
+          .preview-note {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
             
-            &:hover {
-              background: #e53935;
+            .preview-name {
+              font-size: 18px;
+              font-weight: bold;
+              color: #333;
             }
-          }
-          
-          &:active {
-            transform: scale(0.95);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            
+            .preview-symbol {
+              font-size: 24px;
+              color: #667eea;
+            }
           }
         }
       }
     }
     
-    .sheet-selection {
+    // 改进的乐谱选择弹窗遮罩
+    .sheet-selection-overlay {
       position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      padding: 20px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      border-radius: 8px;
-      width: 80%;
-      max-width: 500px;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(5px);
       z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    .sheet-selection {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      width: 90%;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+      animation: modalSlideIn 0.3s ease;
+      transform-origin: center center;
       
       .selection-header {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 15px;
+        align-items: center;
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #f0f0f0;
         
         h3 {
           margin: 0;
+          font-size: 24px;
+          color: #333;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          
+          .header-icon {
+            font-size: 28px;
+          }
         }
         
         .close-btn {
-          font-size: 24px;
+          width: 40px;
+          height: 40px;
+          border: none;
+          background: #f5f5f5;
+          border-radius: 50%;
           cursor: pointer;
-          opacity: 0.6;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.3s ease;
           
           &:hover {
-            opacity: 1;
+            background: #ff6b6b;
+            color: white;
+            transform: scale(1.1);
+          }
+          
+          span {
+            font-size: 18px;
+            font-weight: bold;
           }
         }
       }
       
       .sheet-list {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        
         .sheet-item {
-          padding: 15px;
-          border-bottom: 1px solid #eee;
+          position: relative;
+          background: #f8f9ff;
+          border: 2px solid transparent;
+          border-radius: 15px;
+          padding: 20px;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: all 0.3s ease;
           
           &:hover {
-            background: #f0f7ff;
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
           }
           
-          &:last-child {
-            border-bottom: none;
+          &.active {
+            border-color: #51cf66;
+            background: #e8f5e8;
+          }
+          
+          .sheet-preview {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            
+            .sheet-cover {
+              width: 60px;
+              height: 60px;
+              background: linear-gradient(135deg, #667eea, #764ba2);
+              border-radius: 12px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              flex-shrink: 0;
+              
+              .cover-icon {
+                font-size: 24px;
+                color: white;
+              }
+            }
+            
+            .sheet-details {
+              flex: 1;
+              
+              .sheet-name {
+                font-size: 18px;
+                font-weight: bold;
+                color: #333;
+                margin: 0 0 10px 0;
+              }
+              
+              .sheet-stats {
+                display: flex;
+                gap: 15px;
+                margin-bottom: 10px;
+                flex-wrap: wrap;
+                
+                .stat-item {
+                  display: flex;
+                  align-items: center;
+                  gap: 5px;
+                  font-size: 14px;
+                  color: #666;
+                  
+                  .stat-icon {
+                    font-size: 16px;
+                  }
+                  
+                  &.difficulty-badge {
+                    padding: 4px 8px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 12px;
+                    
+                    &.difficulty-easy {
+                      background: #e8f5e8;
+                      color: #2e7d32;
+                    }
+                    
+                    &.difficulty-medium {
+                      background: #fff3e0;
+                      color: #f57c00;
+                    }
+                    
+                    &.difficulty-hard {
+                      background: #ffebee;
+                      color: #d32f2f;
+                    }
+                  }
+                }
+              }
+              
+              .sheet-preview-notes {
+                display: flex;
+                gap: 5px;
+                flex-wrap: wrap;
+                
+                .preview-note-mini {
+                  background: white;
+                  padding: 2px 6px;
+                  border-radius: 4px;
+                  font-size: 12px;
+                  color: #667eea;
+                  border: 1px solid #e0e7ff;
+                }
+                
+                .more-notes {
+                  color: #999;
+                  font-size: 12px;
+                  align-self: center;
+                }
+              }
+            }
+          }
+          
+          .selection-indicator {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 30px;
+            height: 30px;
+            background: #51cf66;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
           }
         }
       }
     }
     
-    // 评分反馈弹窗样式
-
-  .score-feedback {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 25px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-    border-radius: 12px;
-    width: 80%;
-    max-width: 500px;
-    z-index: 1000;
-    text-align: center;
-
-    .feedback-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      border-bottom: 1px solid #f0f0f0;
-      padding-bottom: 15px;
-
-      h3 {
-        margin: 0;
-        font-size: 20px;
-        color: #333;
+    // 动画效果
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0px);
       }
-
-      .close-btn {
-        font-size: 22px;
-        cursor: pointer;
-        color: #666;
-        transition: color 0.2s;
+      50% {
+        transform: translateY(-20px);
       }
-
-      .close-btn:hover {
-        color: #333;
+    }
+    
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+      }
+      40% {
+        transform: translateY(-10px);
+      }
+      60% {
+        transform: translateY(-5px);
+      }
+    }
+    
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+      100% {
+        transform: scale(1);
+      }
+    }
+    
+    @keyframes pulse-ring {
+      0% {
+        transform: scale(0.8);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(2);
+        opacity: 0;
+      }
+    }
+    
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+      @keyframes modalSlideIn {
+      from {
+        transform: scale(0.7);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1);
+        opacity: 1;
       }
     }
 
-    .feedback-content {
-      margin-bottom: 25px;
-    }
-
-    .score-overview {
-      margin: 20px 0;
-      h4 {
-        font-size: 24px;
-        margin: 0;
-        color: #333;
+    @keyframes feedbackPulse {
+      0% {
+        transform: translate(-50%, -50%) scale(0.5);
+        opacity: 0;
       }
-      .score-number {
-        font-size: 36px;
-        font-weight: bold;
-        color: #ff9500;
-        display: block;
-        font-family: 'Arial', sans-serif;
+      50% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
       }
     }
 
-    .score-details {
-      background: #f9f9f9;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      text-align: left;
-      p {
-        margin: 10px 0;
-        color: #333;
-        font-size: 16px;
+    @keyframes perfectBounce {
+      0% {
+        transform: translate(-50%, -50%) scale(0.3) rotate(-10deg);
+        opacity: 0;
+      }
+      50% {
+        transform: translate(-50%, -50%) scale(1.3) rotate(5deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(1) rotate(0deg);
+        opacity: 1;
       }
     }
 
-    .error-details {
-      background: #fff8e1;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      text-align: left;
-      h4 {
-        margin-top: 0;
-        color: #f57c00;
-        font-size: 18px;
+    @keyframes goodSlide {
+      0% {
+        transform: translate(-50%, -50%) translateY(-30px) scale(0.5);
+        opacity: 0;
       }
-      ul {
-        list-style-type: none;
-        padding: 0;
-        li {
-          padding: 8px 0;
-          color: #e65100;
-          font-size: 16px;
+      50% {
+        transform: translate(-50%, -50%) translateY(10px) scale(1.1);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -50%) translateY(0) scale(1);
+        opacity: 1;
+      }
+    }
+
+    @keyframes missShake {
+      0%, 100% {
+        transform: translate(-50%, -50%) translateX(0) scale(1);
+        opacity: 1;
+      }
+      25% {
+        transform: translate(-50%, -50%) translateX(-10px) scale(1.1);
+      }
+      75% {
+        transform: translate(-50%, -50%) translateX(10px) scale(1.1);
+      }
+    }
+      // 响应式设计
+    @media (max-width: 768px) {
+      .rhythm-game {
+        padding: 15px;
+        
+        .fp-header {
+          margin-bottom: 15px;
+          
+          .header-content {
+            padding: 15px;
+          }
+          
+          .main-title {
+            font-size: 20px;
+            flex-direction: column;
+            gap: 5px;
+          }
+          
+          .subtitle {
+            font-size: 12px;
+          }
+        }
+        
+        .sheet-container {
+          padding: 20px;
+          
+          .sheet-header {
+            flex-direction: column;
+            align-items: stretch;
+            
+            .sheet-actions {
+              justify-content: center;
+            }
+          }
+          
+          .sheet-display {
+            padding: 15px;
+            
+            .note-list {
+              .note-item {
+                min-width: 60px;
+                height: 70px;
+                padding: 8px 12px;
+                
+                .note-content {
+                  .note-name {
+                    font-size: 12px;
+                  }
+                  
+                  .note-symbol {
+                    font-size: 16px;
+                  }
+                  
+                  .note-duration {
+                    font-size: 10px;
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        .sheet-selection {
+          width: 95%;
+          padding: 20px;
+          
+          .sheet-list {
+            .sheet-item {
+              .sheet-preview {
+                flex-direction: column;
+                text-align: center;
+                
+                .sheet-cover {
+                  align-self: center;
+                }
+              }
+            }
+          }
         }
       }
     }
 
-    .feedback-footer {
-      .btn-close {
-        background: #0166bd;
+    // 结果面板样式
+    .result-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1001;
+      animation: fadeIn 0.5s ease;
+
+      .result-content {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 20px;
+        padding: 40px;
+        text-align: center;
         color: white;
-        border: none;
-        padding: 12px 25px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 16px;
-        transition: background 0.3s;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        max-width: 400px;
+        width: 90%;
+        animation: modalSlideIn 0.5s ease;
+
+        .result-title {
+          font-size: 28px;
+          margin-bottom: 30px;
+          font-weight: bold;
+        }
+
+        .result-summary {
+          margin-bottom: 30px;
+
+          p {
+            font-size: 18px;
+            margin: 10px 0;
+          }
+
+          .final-score {
+            font-size: 32px;
+            font-weight: bold;
+            color: #ffd43b;
+          }
+
+          .max-combo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #51cf66;
+          }
+        }
+
+        .result-details {
+          margin-bottom: 30px;
+
+          .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            font-size: 16px;
+
+            &.perfect {
+              background: rgba(255, 212, 59, 0.2);
+            }
+
+            &.good {
+              background: rgba(81, 207, 102, 0.2);
+            }
+
+            &.miss {
+              background: rgba(255, 107, 107, 0.2);
+            }
+
+            span {
+              font-weight: bold;
+              font-size: 18px;
+            }
+          }
+        }
+
+        .btn-back {
+          padding: 12px 30px;
+          background: rgba(255, 255, 255, 0.2);
+          border: 2px solid white;
+          border-radius: 25px;
+          color: white;
+          font-size: 16px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+
+          &:hover {
+            background: white;
+            color: #667eea;
+            transform: translateY(-2px);
+          }
+        }
       }
     }
-  }
- 
-    .start-message {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background-color: rgba(255, 255, 255, 0.9);
-      color: #333;
-      padding: 15px 20px;
-      border-radius: 8px;
-      z-index: 100;
-      text-align: center;
-      max-width: 300px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      border-left: 4px solid #0166bd;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    
-    /* 历史记录弹窗样式 */
+
+    // 历史记录弹窗样式
     .history-feedback {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 25px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    border-radius: 16px;
-    width: 80%;
-    max-width: 500px;
-    z-index: 1000;
-
-    .feedback-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid #f0f0f0;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.3s ease;
 
-      h3 {
-        margin: 0;
-        font-size: 18px;
-        color: #333;
+      .feedback-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        border-bottom: 2px solid #f0f0f0;
+
+        h3 {
+          margin: 0;
+          font-size: 20px;
+          color: #333;
+        }
+
+        .close-btn {
+          background: none;
+          border: none;
+          font-size: 24px;
+          cursor: pointer;
+          color: #999;
+          
+          &:hover {
+            color: #666;
+          }
+        }
       }
 
-      .close-btn {
-        font-size: 20px;
-        cursor: pointer;
-        color: #666;
+      .history-content {
+        background: white;
+        border-radius: 15px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 80vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+
+        .history-filters {
+          display: flex;
+          gap: 10px;
+          padding: 20px;
+          border-bottom: 1px solid #f0f0f0;
+
+          .filter-btn {
+            padding: 8px 16px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+
+            &:hover {
+              background: #667eea;
+              color: white;
+            }
+          }
+        }
+
+        .batch-delete {
+          padding: 10px 20px;
+          border-bottom: 1px solid #f0f0f0;
+
+          .batch-delete-btn {
+            padding: 8px 16px;
+            border: 2px solid #ff6b6b;
+            background: white;
+            color: #ff6b6b;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+
+            &:hover {
+              background: #ff6b6b;
+              color: white;
+            }
+          }
+        }
+
+        .history-list {
+          flex: 1;
+          overflow-y: auto;
+          padding: 20px;
+
+          .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f8f9ff;
+            border-radius: 10px;
+            border: 1px solid #e0e7ff;
+            transition: all 0.3s ease;
+
+            &:hover {
+              box-shadow: 0 4px 15px rgba(102, 126, 234, 0.1);
+            }
+
+            .history-song {
+              font-weight: bold;
+              color: #333;
+              flex: 1;
+            }
+
+            .history-score {
+              color: #667eea;
+              font-weight: bold;
+              margin: 0 15px;
+            }
+
+            .history-time {
+              color: #666;
+              font-size: 12px;
+              margin: 0 15px;
+            }
+
+            .history-status {
+              color: #666;
+              font-size: 14px;
+              margin: 0 15px;
+            }
+
+            .delete-btn {
+              padding: 4px 12px;
+              background: #ff6b6b;
+              color: white;
+              border: none;
+              border-radius: 15px;
+              cursor: pointer;
+              transition: all 0.3s ease;
+
+              &:hover {
+                background: #ff5252;
+              }
+            }
+          }
+        }
+
+        .delete-all-container, .delete-selected-container {
+          padding: 20px;
+          border-top: 1px solid #f0f0f0;
+          text-align: center;
+
+          .delete-all-btn, .delete-selected-btn {
+            padding: 10px 20px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+
+            &:hover {
+              background: #ff5252;
+            }
+          }
+        }
       }
     }
-
-    .history-filters {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 15px;
-    }
-
-    .filter-btn {
-      padding: 8px 12px;
-      background: #f5f5f5;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      color: #333;
-
-      &:hover {
-        background: #e0e0e0;
-      }
-    }
-
-    .batch-delete {
-      margin-bottom: 15px;
-    }
-
-    .batch-delete-btn {
-      padding: 8px 12px;
-      background: #f5f5f5;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      color: #333;
-    }
-
-    .history-list {
-      max-height: 300px;
-      overflow-y: auto;
-      margin-bottom: 15px;
-    }
-
-    .history-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 10px;
-      border-bottom: 1px solid #f0f0f0;
-    }
-
-    .history-song {
-      flex: 2;
-      font-weight: 500;
-      color: #333;
-    }
-
-    .history-score, .history-time {
-      flex: 1;
-      text-align: center;
-      color: #555;
-    }
-
-    .history-status {
-      flex: 2;
-      text-align: right;
-      color: #555;
-      font-size: 14px;
-    }
-
-    .delete-btn {
-      margin-left: 10px;
-      padding: 3px 8px;
-      background: #f44336;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-    }
-
-    .delete-all-container, .delete-selected-container {
-      text-align: center;
-      margin-top: 20px;
-    }
-
-    .delete-all-btn, .delete-selected-btn {
-      padding: 8px 16px;
-      background: #f44336;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-  }
+}
+</style>
 
 
-  .start-prompt {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-  }
-
-  .prompt-content {
-    background-color: white;
-    padding: 30px;
-    border-radius: 8px;
-    text-align: center;
-    max-width: 400px;
-    width: 80%;
-  }
-
-  .prompt-content h3 {
-    margin-top: 0;
-    margin-bottom: 15px;
-  }
-
-  .prompt-content p {
-    margin-bottom: 20px;
-  }
-
-  .prompt-content .btn-close {
-    background: #0166bd;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background 0.3s;
-  }
-
-  .prompt-content .btn-close:hover {
-    background: #0277dc;
-  }
-
-  .feedback-display {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(1.5);
-    font-size: 5em;
-    font-weight: bold;
-    color: white;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-    opacity: 0;
-    transition: all 0.3s ease-out;
-    z-index: 100;
-  }
-
-  .feedback-display.perfect {
-    color: #FFD700; /* Gold */
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-  .feedback-display.good {
-    color: #32CD32; /* LimeGreen */
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-  .feedback-display.miss {
-    color: #FF6347; /* Tomato */
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-  .confetti-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 9999;
-    overflow: hidden;
-  }
-
-  .confetti {
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    opacity: 0;
-  }
-
-  @keyframes fall {
-    0% {
-      opacity: 1;
-      transform: translateY(-10vh) rotateZ(0deg);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(110vh) rotateZ(720deg);
-    }
-  }
-
-  .firecracker-container {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 10000;
-    pointer-events: none;
-  }
-
-  .firecracker {
-    width: 20px;
-    height: 200px;
-    background: red;
-    position: relative;
-    animation: firecracker-explode 1s ease-out forwards;
-  }
-
-  .firecracker::before, .firecracker::after {
-    content: '';
-    position: absolute;
-    width: 100%;
-    height: 40px;
-    background: gold;
-  }
-
-  .firecracker::before {
-    top: -20px;
-  }
-
-  .firecracker::after {
-    bottom: -20px;
-  }
-
-  @keyframes firecracker-explode {
-    0% {
-      transform: scale(0);
-      opacity: 1;
-    }
-    50% {
-      transform: scale(1.5);
-    }
-    100% {
-      transform: scale(0.5) rotate(360deg);
-      opacity: 0;
-    }
-  }
-
-  }
-  </style>
