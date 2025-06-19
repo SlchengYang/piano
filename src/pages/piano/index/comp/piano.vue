@@ -1,6 +1,7 @@
 <template>
   <div ref="piano" class="piano" :style="{ top: hideNavBar ? '0px' : '0px' }">
     <panelsMain />
+    <musical-notes />
     <note-bar />
     <keyboard />
     <div v-if="loading" class="loading">
@@ -19,6 +20,7 @@
 import noteBar from './note-bar.vue';
 import keyboard from './keyboard.vue';
 import panelsMain from './panels-main.vue';
+import musicalNotes from './musical-notes.vue';
 import { setPiano, resize } from './size';
 import { loadSoundfont, tryInitAudioContext } from '../../midi/xiwnn-midi';
 import { start, stop } from './keyboard-pc';
@@ -31,6 +33,7 @@ export default {
     noteBar,
     keyboard,
     panelsMain,
+    musicalNotes,
     xwLoading,
     unsupported() {
       return import(/* webpackChunkName: "piano/unsupported" */ '../../../../comp/tools/unsupported.vue');
@@ -47,35 +50,21 @@ export default {
   computed: {
     hideNavBar() {
       return this.$store.state.hideNavBar;
-    },
-    background() {
-      return this.$store.state.background || 'pianobg.jpg'; // 从Vuex获取背景
-    },
-  },
-  watch: {
-    // 监听背景变化并更新
-    background(newBg) {
-      this.applyBackground(newBg);
+    },    background() {
+      return this.$store.state.background || 'pianobg.jpg'; // 从Vuex获取背景（仅用于计算属性，不直接应用）
     },
   },
+  // 移除背景相关的watch，让上层app.vue处理
   mounted() {
     this.$refs.piano.style.bottom = '0';
     setPiano(this);
     this.init();
     this.initSize();
-    this.applyBackground(this.background); // 初始设置背景
-  },
-  destroyed() {
+    // 不再在这里设置背景，交给上层app.vue处理
+  },  destroyed() {
     stop();
   },
   methods: {
-    // 统一的背景设置方法
-    applyBackground(bg) {
-      document.body.style.backgroundImage = `url(${require(`@/assets/${bg}`)})`;
-      document.body.style.backgroundSize = 'cover';
-      document.body.style.backgroundRepeat = 'no-repeat';
-      document.body.style.backgroundPosition = 'center center';
-    },
     initSize() {
       const width = window.innerWidth;
       if (width > 0) {
